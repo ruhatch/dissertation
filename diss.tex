@@ -22,7 +22,7 @@
 
 \renewcommand{\baselinestretch}{1.1}    % adjust line spacing to make
                                         % more readable
-                                        
+
 \newcommand{\mytodo}{\todo[inline, color=green!40]}
 
 \begin{document}
@@ -63,7 +63,7 @@ Examination:        & \bf Computer Science Tripos -- Part II, July 2016  \\
 Word Count:         & \bf \footnotemark[1]
                       (well less than the 12000 limit)  \\
 Project Originator: & Dr Nik Sultana                    \\
-Supervisors:         & Dr Nik Sultana \& Dr Richard Mortier                    \\ 
+Supervisors:         & Dr Nik Sultana \& Dr Richard Mortier                    \\
 \end{tabular}
 }
 \footnotetext[1]{This word count was computed
@@ -83,7 +83,7 @@ by \texttt{detex diss.tex | tr -cd '0-9A-Za-z $\tt\backslash$n' | wc -w}
 \section*{Special Difficulties}
 
 
- 
+
 \newpage
 \section*{Declaration}
 
@@ -282,7 +282,7 @@ ORAM forms the basis for the whole project and as such is given high priority. O
 
 \subsection{OCaml}
 
-Having decided to build ORAM on top of MirageOS, OCaml was really the only choice of programming language, because Mirage applications and libraries are all built in OCaml. However, OCaml was also part of the reason for choosing to build on Mirage. 
+Having decided to build ORAM on top of MirageOS, OCaml was really the only choice of programming language, because Mirage applications and libraries are all built in OCaml. However, OCaml was also part of the reason for choosing to build on Mirage.
 
 OCaml has an extremely powerful module system, making it easy to parameterise the ORAM implementation over module signatures for Block devices or other system components. This not only encourages more generalised programming, but also allows powerful techniques like recursive modules to be exploited. For instance, to implement recursive ORAM, the position map of the main ORAM is another ORAM, so we can simply parameterise over a position map signature and pass the ORAM implementation to itself as the position map.
 
@@ -349,7 +349,7 @@ OASIS & 0.4.5 & Build Tool & LGPL-2.1 \\
 
 % Talk about the ability to do Test Driven Development and the power of unit tests
 
-I employed two major techniques to ensure my code was well thought through and well built, while remaining productive. 
+I employed two major techniques to ensure my code was well thought through and well built, while remaining productive.
 
 First of all a Test Driven Development approach allowed me to fail fast. I wrote unit tests for each new piece of code that was written, until I was sure that it was working correctly. This meant that when it came to combining small modules into a larger system, things worked together as expected more often than not.
 
@@ -452,7 +452,7 @@ Now the only remaining problem is creating the position map. \Cref{alg:posmapdim
 
 We want ORAM to be able to replace any existing block device in any Mirage program. In order to do this we need access to the methods of the underlying block device as well as the block device itself. Thus, we need to build an ORAM functor, that takes a module satisfying the \texttt{BLOCK} interface, shown in \cref{lst:blocksig}, and gives us a new module satisfying the same interface.
 
-In order to get access to this underlying device, we need a \texttt{create} method, which takes a block device as input and returns something of type \texttt{Oram.Make(B).t}, shown in \cref{lst:orammaketype}. This type contains the ORAM parameters such as \texttt{bucketSize} and \texttt{offset}, structural information such as the \texttt{height} of the ORAM and the \texttt{numLeaves}, and pointers to the stash, position map, and underlying block device. 
+In order to get access to this underlying device, we need a \texttt{create} method, which takes a block device as input and returns something of type \texttt{Oram.Make(B).t}, shown in \cref{lst:orammaketype}. This type contains the ORAM parameters such as \texttt{bucketSize} and \texttt{offset}, structural information such as the \texttt{height} of the ORAM and the \texttt{numLeaves}, and pointers to the stash, position map, and underlying block device.
 
 The following parameters are passed as input to the \texttt{create} method, along with the block device:
 
@@ -466,10 +466,10 @@ Using these, the \texttt{create} method can calculate new structural information
 
 This is all of the structural information we require, so now we only have a couple of things left to do. We must create instances of the client-side data structures and we must initialise the ORAM space. The first simply calls the creation functions of the associated data structures. The second loops through the block device, writing dummy blocks to every location. Dummy blocks have address -1, and are ignored by the access protocol. Now we can return everything that we have as an instance of \texttt{ORAM.Make(B).t}.
 
-\begin{listing}[H]
+\begin{listing}[h]
 \caption{The type of an ORAM device \texttt{ORAM.Make(B).t}}
 \label{lst:orammaketype}
-\inputminted[firstline=27, lastline=39]{ocaml}{../mirage-oram/lib/oram.ml}
+\inputminted[firstline=27, lastline=58]{ocaml}{../mirage-oram/lib/oram.ml}
 \end{listing}
 
 
@@ -610,10 +610,20 @@ There is of course hidden complexity here. How do we create a recursive ORAM? We
 
 \mytodo{In particular talk about/show maths involved in automatically determining optimal size/number of levels of recursion}
 
+% Talk about wanting to have automatic recursion, and the constraints of the type system
+
 \subsection{Statelessness}
 \label{subsec:statelessness}
 
-\mytodo{Explain the implementation of Statelessness}
+In order to achieve statelessness for ORAM, we need to store a few different things. We need to store type information, the stash, and the position map. We will first talk about how to layout all of this information on disk, before moving on to talk about how we actually get it there.
+
+Once we have initialised ORAM and begun to use it, we do not want to move it around on disk, because we would have to copy the entire thing. We do however need to store the information necessary to discover ORAMs existence in a well-known location, in order to allow us to reconnect to it. This leads us to storing a superblock in the first sector of the block device. This block will contain a pointer to the location of the rest of the state, along with its length. This way, we can store ORAM starting at the second location on disk, and then append all of the state at the end of the ORAM section, meaning we will never have to move ORAM once we have initialised it.
+
+Now we actually need to store the state, which means we need some method of serialising it, ready to be written to disk. We could implement this manually, but for the majority of the information we can take advantage of an existing serialisation library, Jane Street's Bin\_prot. This is a binary protocol, that allows you to annotate a type with \texttt{[@@ deriving bin\_io]} and will then generate functions to read and write instances of the type into buffers. We are able to use this for all of the type information for ORAM, as well as for the stash. This leads us to splitting the ORAM type into a core, that can use Bin\_prot, and an extended type, that includes the position map and the underlying block device. This structure is shown in \cref{lst:orammaketype}.
+
+The position map is more difficult to serialise, because under recursive ORAM, it might actually be another ORAM. We obviously don't want to write the entire of the position map ORAM onto the disk a second time, so we need a custom serialisation function for the position map that will store only meta-data for ORAM position maps, and will store the entire position map in the base case. We want to store all state right at the end of the block device, after all recursive instances, so this function actually collects the data from all the levels of recursion together into one buffer.
+
+Now that we can write all of the major parts into the buffer, we simply collect everything together and dump it at the end of the block device. After this is done, we are able to disconnect from ORAM safely. Reconnecting to ORAM is now a case of checking for the presence of the superblock, reading in the location and length of the state, reading the actual state, and then calling the connect function on the position map. The connect function allows each recursive ORAM instance to have its own reference to the underlying block device, but does nothing in the case of the in memory position map.
 
 \subsection{Integrity Verification}
 
@@ -639,7 +649,7 @@ We could now build a working file system, but we want it to be stateless. In ord
 
 We need a data structure that associates keys, in the form of file hashes, with values, in the form of pointers to inodes. We want to support operations of insertion, lookup and deletion efficiently, but we also want to store the data structure on disk. This leads us naturally to an implementation using B-Trees.\footnote{The algorithms for B-Tree operations were adapted from \cite{CLRS09}}
 
-B-Trees are a generalisation of self-balancing binary search trees, where each node can have more than one child. If a node has $n$ children, then it stores $n-1$ keys. It is guaranteed that $$ \forall k \in child_m, j \in child_{m+1} . k < key_m < j, $$ that is, a key is greater than all the keys to its left and less than all the keys to its right. 
+B-Trees are a generalisation of self-balancing binary search trees, where each node can have more than one child. If a node has $n$ children, then it stores $n-1$ keys. It is guaranteed that $$ \forall k \in child_m, j \in child_{m+1} . k < key_m < j, $$ that is, a key is greater than all the keys to its left and less than all the keys to its right.
 
 B-Trees are an efficient on-disk data structure, because we can use the whole of a disk sector for one node. This gives us an extremely high branching factor, reducing the depth of the tree and therefore the number of disk sectors that we need to access in any single operation. On creation of the file system, we calculate the branching factor of the tree in order to fill as much of each sector as possible with useful information.
 
@@ -707,6 +717,13 @@ Writing files is the most important step, because this is where the search modul
 
 Encryption is something that it can be fatal to get wrong. In the case of ORAM, if you don't have encryption, it's completely superfluous. Thus, we want to use tested and trusted cryptographic libraries, rather than rolling our own. Luckily for us, there is an existing implementation of an encrypted block device satisfying Mirage's \texttt{BLOCK} interface, that provides a functor very similar to the ones that we created for ORAM. We simply have to chain together the application of this functor with the ones that we are already using to get an encrypted block device.
 
+\section{Summary}
+\label{sec:implSummary}
+
+In this chapter we have discussed the implementation of all of the components of our system, including the important design decisions and trade-offs that were made. We have seen how to implement recursive Path ORAM in a way that allows it to plug into existing MirageOS programs, and we have seen how to build a file system and search operations on top of it.
+
+We now move on to the important task of evaluation, where we make sure that I have implemented ORAM in a way that ensures functionality, performance, and security, and have therefore achieved the aims of the project.
+
 \chapter{Evaluation}
 
 % ### Functionality ###
@@ -733,30 +750,96 @@ Encryption is something that it can be fatal to get wrong. In the case of ORAM, 
 
 % Show specifically that with the entire access pattern, the server can infer which documents are returned by each query, and could therefore perform the attack described by Islam et al.
 
+This chapter explains the methodology used to ensure the correctness of the ORAM implementation, as well as analysing its performance and security properties. \Cref{sec:overallResults} gives a summary of the results and compares them with expectations. \Cref{sec:unitTests} discusses functional testing through the use of Unit Testing and Randomised Testing. \Cref{sec:performanceTesting} then goes on to discuss performance, and then finally we analyse the security of ORAM in \cref{sec:securityAnalysis}.
+
 \section{Overall Results}
+\label{sec:overallResults}
 
 \mytodo{Give an overview of the results and how things compare to expectations}
 
-\section{Functional Testing}
+\section{Unit Tests}
+\label{sec:unitTests}
 
-\subsection{Unit Tests}
+Unit testing was used throughout the development process, which allowed me to be sure that individual components were functioning correctly, before I combined them into larger more complicated systems. This section describes the most important test cases that were examined for each module and discusses the use of randomised testing to cover a larger range of input values.
 
-\mytodo{Talk about unit tests and how they were useful throughout the development process}
+\subsection{Stash}
 
-\subsection{Randomised Testing}
+There three main cases to test for the stash:
 
-\mytodo{Talk about the use of Quickcheck to push functional testing further}
+\begin{itemize}
+  \item Values not expected to be in the stash are not found
+  \item Values that have been added to the stash are found
+  \item Adding dummy blocks to the stash has no effect
+\end{itemize}
+
+During the development process, I simply hand-coded a small number of example cases, but in order to test more extensively, I coded the above three cases as properties for randomised testing. This generates a number of test cases and verifies that the properties hold in every case and allows us to cover far more cases than hand-coded tests alone.
+
+\subsection{Position Map}
+
+We need to test the two main aspect of the position map. Firstly, the translation of 64 bit addresses into 3 regular integers, and then its actually operation as a data structure.
+
+The code performing the translation is essentially a mathematical definition in itself, so any property definition that we might use for randomised testing would probably just be the original code. Thus, in this instance we simply check a few hand chosen random cases, along with the important edge cases. The edge cases we want to check are the maximum, and minimum values, along with values either side of a change in the higher indices, that is values with output $(x,y,max\_int)$ and $(x,y+1,0)$, and similarly for the higher index.
+
+In terms of operation, we want to check that on adding a value to the position map, we read back the same value, and that trying to add a value at an address outside of the allowed range results in an error. Both of these cases can be coded up as properties for randomised testing.
+
+\subsection{ORAM}
+
+The ORAM implementation is particularly amenable to randomised testing, because we tend to define inverse functions for most of its functionality. This makes it very easy to write properties for randomised testing of the form $f(f^{-1}(x)) = x$. This allows us to check that each stage of ORAM is operating correctly, from writing individual blocks, through writing entire paths, to writing entire files.
+
+For other functions that were not so easy to code properties for, regular unit testing was used. These include reconnecting to ORAM to test statelessness, and performing simple calculations, such as computing the height for ORAM.
+
+\subsection{FreeMap}
+
+The FreeMap allocates blocks in the block device to be used by different parts of the file system. We need to make sure that on creation, it allocates the correct number of initial blocks, and then subsequently always allocates the correct number of blocks, if they are available, and only ever allocates blocks that are actually free.
+
+During development, I used only a handful of test cases, covering some of the most important edge cases. This included creating the map, and checking that nothing was allocated to begin with except the first $n$, where $n$ is passed into the creation function. Then, I checked that allocating and deallocating a few different sequences of blocks led to the expected results. Finally, I checked that if there were not enough free blocks, that an error was returned.
+
+After main development had finished, I added some randomised testing to this module to cover a wider range of inputs.
+
+\subsection{BTrees}
+
+\subsection{Inodes}
+
+\subsection{File System}
+
+\subsection{Inverted Index}
+
+\subsection{Search Module}
 
 \section{Performance Testing}
+\label{sec:performanceTesting}
 
-\subsection{Microbenchmarks}
+\subsection{Parameter Optimisation}
+\label{sub:parameterOptimisation}
 
-\mytodo{Talk about microbenchmarks, identifying part of the system that are taking time/memory}
+\subsubsection{Block Size}
+
+\mytodo{Talk about optimising the block size both above and below the encryption layer and for various block sizes}
+\mytodo{Give potential explanation for the resulting optimal parameter values}
+
+\subsubsection{Bucket Size}
+
+\mytodo{Talk about optimising the bucket size for various block sizes}
+\mytodo{Give potential explanation for the resulting optimal parameter values and compare with the Path ORAM paper}
 
 \subsection{Comparison with Literature}
 \label{subsec:comparisonWithLiterature}
 
-\mytodo{Compare the results of microbenchmarking with theoretical bounds on speed, bandwidth and stash size given in the literature}
+\mytodo{Talk about the failure of the initial control experiment, due to writes and reads being of different costs, and the resulting effect on the largest blockDevices}
+
+\mytodo{Talk about a redesigned control that uses equal numbers of read and write for every block device while still using a large enough number of blocks}
+
+\mytodo{Talk about how with more time we would run a control that performed 2 * maximumSectorSize reads and writes, so that they all on average do half reads and half writes}
+
+\mytodo{Talk about the time experiment and the results of it compared to the control experiment}
+
+\mytodo{Talk about the testing the overhead required or statlessness}
+
+\mytodo{Compare the overhead required with recursive ORAM}
+
+\mytodo{Compare the speed of recursive ORAM and discuss the resulting trade-off between speed and space and the possibility for statelessness}
+
+\mytodo{Discuss further evaluation that would be carried out if there were more time (bandwidth overheads and such like)}
 
 \subsection{File System Benchmarking}
 \label{subsec:fsBenchmarking}
@@ -764,11 +847,18 @@ Encryption is something that it can be fatal to get wrong. In the case of ORAM, 
 \mytodo{Talk about testing the file system (and therefore ORAM) on standardised workloads, allowing us to compare with other file systems in a useful way}
 
 \section{Security Analysis}
+\label{sec:securityAnalysis}
 
 \mytodo{Discuss how to perform security analysis using statistical tests}
 \mytodo{Show results of security analysis}
 
-\chapter{Conclusion}
+\chapter{Conclusions}
+
+\section{Results}
+
+\section{Lessons Learnt}
+
+\section{Future Work}
 
 \mytodo{Sum up main results of the dissertation}
 
