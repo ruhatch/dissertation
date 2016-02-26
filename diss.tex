@@ -12,7 +12,7 @@
 \usepackage{tabularx}
 
 %%%%%%% Using Minted Package for Code Listings %%%%%%%
-\usepackage[outputdir=.texpadtmp]{minted}
+\usepackage{minted}
 \usemintedstyle{colorful}
 
 \raggedbottom                           % try to avoid widows and orphans
@@ -697,7 +697,7 @@ The basics of Inverted Indexes are discussed in \cref{sec:invertedindexintro}. A
 
 Having decided on our data structure, we need to actually index files. As usual in this project, the files will be \texttt{Cstruct}s. So we have a number of steps to perform in order to process a file. We first convert the file to a string and immediately strip it of characters we don't need, pretty much all punctuation. At this point we have a sequence of alphanumeric character strings, separated by spaces and newlines, so we can perform a split on these characters to get a list of words.
 
-We could perform indexing now, adding the name of the current file to the postings list of every word in our list, but there are a couple of things that we want to do first. We really don't want to store separate words for `run', `ran', `runs', and so on, so we will perform some linguistic preprocessing, stemming the words using Porter's stemming algorithm. I used a small open-source library implementation of this algorithm. This technique not only reduces the size of the index, but also arguably improves search, because now queries for 'run' can automatically returns documents containing any morphological derivation.
+We could perform indexing now, adding the name of the current file to the postings list of every word in our list, but there are a couple of things that we want to do first. We really don't want to store separate words for `run', `ran', `runs', and so on, so we will perform some linguistic preprocessing, stemming the words using Porter's stemming algorithm. I used a small open-source library implementation of this algorithm. This technique not only reduces the size of the index, but also arguably improves search, because now queries for `run' can automatically returns documents containing any morphological derivation.
 
 Finally, we remove duplicates from our list of words, reducing insertion overhead, and put the entires into the index.
 
