@@ -10,6 +10,8 @@
 \usepackage{algpseudocode}
 \usepackage{algorithm}
 \usepackage{tabularx}
+\usepackage{tikz}
+\usetikzlibrary{trees}
 
 %%%%%%% Using Minted Package for Code Listings %%%%%%%
 \usepackage{minted}
@@ -541,50 +543,51 @@ It is the second two of these plumbing functions that have a much more interesti
 
 This is most easily explained using \cref{fig:bucketaddress}. Here we can see the nodes labelled in order of their position in memory. The leaves are also labelled, but the binary representations of these labels are actually more important. The binary representation, read from left to right, tells us how to reach the leaf. To get to leaf 5, with binary representation 101, we go right, left, right. When we go left, we double the label on the node and add one, and when we go right, we add two. Multiplying this node label by the block size and the bucket size gives us the physical address of the node. So for a node at level $l$, we only compare the first $l$ bits, following the procedure above.
 
-\begin{figure}[h]
-  \centering
-    \begin{picture}(310,160)
-    \put(140,140){\framebox(30,20){0}}
-    \put(155,140){\vector(4,-1){78}}
-    \put(155,140){\vector(-4,-1){78}}
-    \put(197,135){1}
-    \put(60,100){\framebox(30,20){1}}
-    \put(75,100){\vector(2,-1){38}}
-    \put(75,100){\vector(-2,-1){38}}
-    \put(220,100){\framebox(30,20){2}}
-    \put(235,100){\vector(2,-1){38}}
-    \put(198,95){0}
-    \put(235,100){\vector(-2,-1){38}}
-    \put(20,60){\framebox(30,20){3}}
-    \put(35,60){\vector(1,-1){19}}
-    \put(35,60){\vector(-1,-1){19}}
-    \put(100,60){\framebox(30,20){4}}
-    \put(115,60){\vector(1,-1){19}}
-    \put(115,60){\vector(-1,-1){19}}
-    \put(180,60){\framebox(30,20){5}}
-    \put(195,60){\vector(1,-1){19}}
-    \put(195,60){\vector(-1,-1){19}}
-    \put(215,50){1}
-    \put(260,60){\framebox(30,20){6}}
-    \put(275,60){\vector(1,-1){19}}
-    \put(275,60){\vector(-1,-1){19}}
-    \put(0,20){\framebox(30,20){7}}
-    \put(40,20){\framebox(30,20){8}}
-    \put(80,20){\framebox(30,20){9}}
-    \put(120,20){\framebox(30,20){10}}
-    \put(160,20){\framebox(30,20){11}}
-    \put(200,20){\framebox(30,20){12}}
-    \put(240,20){\framebox(30,20){13}}
-    \put(280,20){\framebox(30,20){14}}
-    \put(12,0){0}
-    \put(52,0){1}
-    \put(92,0){2}
-    \put(132,0){3}
-    \put(172,0){4}
-    \put(212,0){5}
-    \put(252,0){6}
-    \put(292,0){7}
-  \end{picture}
+\begin{figure}[ht]
+    \centering
+    \begin{tikzpicture}[level/.style={sibling distance=75mm/#1},
+        level 3/.style={sibling distance=18mm},
+        every node/.style={minimum size=10mm,shape=circle},
+        edge from parent/.style={draw,-latex}]
+        \node[draw,grow=down] {0} 
+        child {
+          node[draw] {1}
+          child { node[draw] {3}
+            child {
+              node[draw] (n7) {7}
+            }
+            child { node[draw] (n8) {8} }
+          }
+          child { node[draw] {4} 
+            child { node[draw] (n9) {9} }
+            child { node[draw] (n10) {10} }
+          }
+        }
+        child {
+          node[draw] {2}
+          child { node[draw] {5}
+            child { node[draw] (n11) {11} }
+            child {
+              node[draw] (n12) {12}
+              edge from parent node[near start,right] {1}
+            }
+            edge from parent node[near start,left] {0}
+          }
+          child { node[draw] {6} 
+            child { node[draw] (n13) {13} }
+            child { node[draw] (n14) {14} }
+          }
+          edge from parent node[above] {1}
+        };
+        \node [below of=n7] {0};
+        \node [below of=n8] {1};
+        \node [below of=n9] {2};
+        \node [below of=n10] {3};
+        \node [below of=n11] {4};
+        \node [below of=n12] {5};
+        \node [below of=n13] {6};
+        \node [below of=n14] {7};
+  \end{tikzpicture}
   \caption{Visualisation of \cref{alg:bucketaddress}}
   \label{fig:bucketaddress}
 \end{figure}

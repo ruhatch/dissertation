@@ -1,3 +1,11 @@
 .texpadtmp/*
 _minted-diss
 *.tdo
+*.toc
+*.aux
+*.log
+*.out
+*.bbl
+*.blg
+*.lof
+auto/
