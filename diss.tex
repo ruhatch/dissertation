@@ -154,7 +154,7 @@ Finally in order for the system to perform query-based search over encrypted doc
 
 \section{Related Work}
 
-\mytodo{Explore and discuss related work}
+ORAM was first introduced by Goldreich et al. in \cite{goldreich1996software}, motivated by the needed for software protection on disks. The model was then expanded and refined for other settings such as secure processors and cloud computing over a number of years (\cite{shi2011oblivious}). \cite{stefanov2013path} had a large impact on the field, mainly due to the simplicity and elegance of the protocol. Since then, lots of work has been done to optimise ORAM constructions (\cite{yu2014enhancing},\cite{ren2015constants}), add additional features (\cite{moataz2015resizable}), and build actual systems based on them (\cite{stefanov2013oblivistore}). An extremely useful thesis, \cite{teeuwen2015evolution}, summarised the entire ORAM field, providing insight into the evolution and therefore future of ORAM.
 
 \chapter{Preparation}
 
@@ -243,7 +243,7 @@ Recursion works by storing the position map of our original ORAM, now referred t
 
 The inverted index is the single most important data structure in Information Retrieval. It allows us to perform a large amount of work in advance in order to give performance that is linear in the number of documents involved in a query, much better than a linear scan of all documents that is $O(NK)$, for $N$ documents with an average of $K$ terms. It consists of two parts: the dictionary and the postings. The dictionary is a list, usually stored as a hash table, of all of the terms that appear in a set of documents. Then for each term, we have a postings list, a list of all the documents that contain a term. Collectively these postings lists are referred to as the postings.
 
-So now looking up a single keyword is as simple as hashing the keyword and returning the relevant postings list, if it exists. Simple boolean operations are also easy to support. Disjunction simply takes the union of two postings lists and conjunction the intersection.
+So now looking up a single keyword is as simple as hashing the keyword and returning the relevant postings list, if it exists. Simple Boolean operations are also easy to support. Disjunction simply takes the union of two postings lists and conjunction the intersection.
 
 In this project we will restrict operations to simple, space-separated disjunctions, because we are focusing on showing the correctness and efficiency of search using the ORAM implementation, rather than creating an advanced IR system.
 
@@ -410,7 +410,7 @@ In order to achieve statelessness, we need to be able to write the stash to disk
 	256 & 303 & 218 & 186 \\
 	\hline
 \end{tabular}
-\caption{Empirical results for maximum persistent stash size}
+\caption{Empirical results for maximum persistent stash size from \cite{stefanov2013path}}
 \label{tab:stashsizes}
 \end{table}
 
@@ -628,10 +628,6 @@ The position map is more difficult to serialise, because under recursive ORAM, i
 
 Now that we can write all of the major parts into the buffer, we simply collect everything together and dump it at the end of the block device. After this is done, we are able to disconnect from ORAM safely. Reconnecting to ORAM is now a case of checking for the presence of the superblock, reading in the location and length of the state, reading the actual state, and then calling the connect function on the position map. The connect function allows each recursive ORAM instance to have its own reference to the underlying block device, but does nothing in the case of the in memory position map.
 
-\subsection{Integrity Verification}
-
-\mytodo{If had time to do integrity verification then include here otherwise discuss why I chose not to include it}
-
 \section{File System}
 \label{sec:fileSystem}
 
@@ -702,7 +698,7 @@ Having decided on our data structure, we need to actually index files. As usual 
 
 We could perform indexing now, adding the name of the current file to the postings list of every word in our list, but there are a couple of things that we want to do first. We really don't want to store separate words for `run', `ran', `runs', and so on, so we will perform some linguistic preprocessing, stemming the words using Porter's stemming algorithm. I used a small open-source library implementation of this algorithm. This technique not only reduces the size of the index, but also arguably improves search, because now queries for `run' can automatically returns documents containing any morphological derivation.
 
-Finally, we remove duplicates from our list of words, reducing insertion overhead, and put the entires into the index.
+Finally, we remove duplicates from our list of words, reducing insertion overhead, and put the entries into the index.
 
 For our purposes we will only implement simple conjunctive phrase search, meaning we look for documents containing all of the words in a space separated query string. Now search is as simple as performing the same preprocessing on the query string, performing lookup on each of the queries in turn and taking the big intersection of the resulting list of hash sets. In order to make this intersection operation efficient, we sort the list by order of hash set size. Then we can filter the smaller hash set by checking for membership in the larger hash set. This means we perform one constant time lookup for each member of the small set, rather than the large, giving a large performance boost, as this smaller set is monotonically decreasing.
 
@@ -758,12 +754,14 @@ This chapter explains the methodology used to ensure the correctness of the ORAM
 \section{Overall Results}
 \label{sec:overallResults}
 
-\mytodo{Give an overview of the results and how things compare to expectations}
+Overall, ORAM performed as expected in terms of functionality, performance, and security. It operated correctly, writing files and reading the same data back out. It continued to do so with the additions of statelessness, recursion, and encryption, so all parts of the system were functional separately and as a whole. In terms of performance, my implementation agreed with the theoretical bounds given in \cite{stefanov2013path}, which state $O(\log N)$ time overhead, $O(\log N)$ client-side storage in the non-recursive case, and $O(1)$ client-side storage in the recursive case. The value of the constant in the last instance was given based on empirical results, and my result (dis)agreed with this, how? Finally, the security analysis showed that ORAM did indeed have a statistically random access pattern, ensuring the security of the implementation.
+
+\mytodo{Tweak this based on actual results}
 
 \section{Unit Tests}
 \label{sec:unitTests}
 
-Unit testing was used throughout the development process, which allowed me to be sure that individual components were functioning correctly, before I combined them into larger more complicated systems. This section describes the most important test cases that were examined for each module and discusses the use of randomised testing to cover a larger range of input values.
+Unit testing was used throughout the development process, which allowed me to be sure that individual components were functioning correctly, before I combined them into larger more complicated systems. This section describes the most important test cases that were examined for each module and discusses the use of randomised testing to cover a larger range of input values. Code coverage testing was also used to make sure that the tests were visiting all parts of the system.
 
 \subsection{Stash}
 
@@ -801,13 +799,19 @@ After main development had finished, I added some randomised testing to this mod
 
 \subsection{BTrees}
 
+It is not possible to test the B-Tree library directly, because it only gives us a functor to create a B-Tree. Thus the B-Tree was tested using the Inode Index, the canonical use case of the library in this system. In order to test the B-Tree properly, it was necessary to use randomised testing to create a reasonable access pattern that was guaranteed to cause splitting of the root node.
+
 \subsection{Inodes}
+
+The inodes needed to be tested to make sure they could add and delete pointers, while maintaining a correct count. This is again amenable to randomised testing, although unit tests were also used throughout the development to test specific cases that would be expected to cause exceptions.
 
 \subsection{File System}
 
-\subsection{Inverted Index}
+In order to test the file system I created a large number of random files and used randomised testing to ensure that under any access pattern the correct files were always read back out once they had been written in. This also included testing to ensure that reasonable exceptions were produced when the file system became full, or a file did not exist in the system.
 
 \subsection{Search Module}
+
+The search module was tested for correctness, i.e. if a file containing a word had been put into the system, then it would appear in the search results. This was difficult to randomise, so I manually constructed a number of test scenarios.
 
 \section{Performance Testing}
 \label{sec:performanceTesting}
@@ -815,56 +819,45 @@ After main development had finished, I added some randomised testing to this mod
 \subsection{Parameter Optimisation}
 \label{sub:parameterOptimisation}
 
-\subsubsection{Block Size}
-
-\mytodo{Talk about optimising the block size both above and below the encryption layer and for various block sizes}
-\mytodo{Give potential explanation for the resulting optimal parameter values}
-
-\subsubsection{Bucket Size}
-
-\mytodo{Talk about optimising the bucket size for various block sizes}
-\mytodo{Give potential explanation for the resulting optimal parameter values and compare with the Path ORAM paper}
+Before performing the main experiments, I decided to optimise the parameters of ORAM, in order to allow the experiments to run faster. The main parameter in question is the block size, which has been shown in \cite{ousterhout1985trace} to dramatically affect the speed of IO operations. I discovered that this was indeed the case with ORAM, as can be seen in \cref{fig:blockSizePlot}. It appeared that increasing the block size has an unbounded increase on performance, but I settled with a block size of 1MB to trade-off between speed and the possibility to specify the size the block device.
 
 \subsection{Comparison with Literature}
 \label{subsec:comparisonWithLiterature}
 
-\mytodo{Talk about the failure of the initial control experiment, due to writes and reads being of different costs, and the resulting effect on the largest blockDevices}
+In order to effectively test the overhead due to ORAM, two things needed to be done very carefully. The first was isolating and removing major sources of uncertainty. When I first ran the experiments, I attempted to run them on my local machine. In this environment, other processes interfered with the ORAM process, making the results unreliable. I secured a remote testing machine in order to run the experiments in complete isolation. Here, at first, they were running on an NFS mounted drive, meaning that network latency and protocol overheads were affecting the results. After moving the experiments to local disk, it was clear that ORAM overheads were finally dominating the results. Now, secondly, I needed to initialise the ORAMs properly. Using a fresh ORAM, the stash is empty and most of the blocks are dummy blocks that get disregarded. It is necessary to run an initialisation sequence in order to remove the effects of these on the results. We use the worst case sequence, writing each block in turn, then reading each block in turn, to ensure that all blocks get used multiple times, leaving the ORAM in a state that it would likely be in after extended use. Only once this steady state has been reached can we reliably test the performance.
 
-\mytodo{Talk about a redesigned control that uses equal numbers of read and write for every block device while still using a large enough number of blocks}
+For the actual experiment, rather than using the worst case sequence, we use a random sequence of block accesses. We perform 10,000 iterations, oscillating between reads and writes in order to balance the different overheads. We are trying to see how the performance changes as the block size increases, so we use ORAMs of a range of sizes, from 12 blocks (a tree of depth 1) to 8188 blocks (a tree of depth 10). The log of the time taken for each ORAM to perform 10,000 iterations is plotted against the logarithm of the size of the ORAM in \cref{fig:timePlot}. We expect this to be a straight line, because we expect logarithmic overheads from ORAM, and we increase the block sizes roughly in powers of two.
 
-\mytodo{Talk about how with more time we would run a control that performed 2 * maximumSectorSize reads and writes, so that they all on average do half reads and half writes}
+\mytodo{Add further close analysis of the actual results}
 
-\mytodo{Talk about the time experiment and the results of it compared to the control experiment}
+The initialisation phase allowed the stash size to reach a steady state, which resulted in a constant overhead of $x$ blocks, compared with $y$ predicted in \cite{stefanov2013path} for a security parameter, $\lambda = z$. This shows something...
 
-\mytodo{Talk about the testing the overhead required or statlessness}
+In these first experiments, we used stateless, non-recursive ORAM, which means that the entire of the position map was being flushed to disk on every access. We now compare the time taken for stateless, recursive ORAM, to see what effect the additional recursive calls have compared to the reduction in the size of the client side state. We can see from \cref{fig:recursiveTimePlot} that overall this was good/bad to some degree.
 
-\mytodo{Compare the overhead required with recursive ORAM}
-
-\mytodo{Compare the speed of recursive ORAM and discuss the resulting trade-off between speed and space and the possibility for statelessness}
-
-\mytodo{Discuss further evaluation that would be carried out if there were more time (bandwidth overheads and such like)}
-
-\subsection{File System Benchmarking}
-\label{subsec:fsBenchmarking}
-
-\mytodo{Talk about testing the file system (and therefore ORAM) on standardised workloads, allowing us to compare with other file systems in a useful way}
+Although it has not been discussed here, bandwidth is another important measure when examining the performance of ORAM, especially when it is being used in the cloud. With more time, a detailed study of the bandwidth used with and without recursion would have been carried out, which would have given further insight into the trade-off that recursion presents us with. We also could have examined the proportion of the overall performance overhead that was contributed by encryption.
 
 \section{Security Analysis}
 \label{sec:securityAnalysis}
 
-\mytodo{Discuss how to perform security analysis using statistical tests}
-\mytodo{Show results of security analysis}
+In order to test the security of ORAM, we need to show that the access pattern observed by the block device is actually statistically random. Of course there is structure to this randomness, because on each access a whole path is read and written, but the actual path that gets written should be random. Thus, we should perform a test for randomness on an actual sequence of path indices. We are in effect testing OCaml's Random library for pseudo-randomness, because the security of our construction relies on it. Taking a 10,000 iteration pattern from the largest block device yielded the following results, that show that it is indeed random to within some significant statistical degree that I don't understand yet.
+
+\mytodo{Redo this based on actual method and results}
 
 \chapter{Conclusions}
 
 \section{Results}
 
+\mytodo{Write the results section based on actual results}
+
 \section{Lessons Learnt}
+
+This project has taught me many important lessons. The one that has had the most impact is time management. I got stuck into the project straight away and did as much work on it as I could during the Michaelmas term and vacation, which meant that hiccoughs later down the line had a large buffer and didn't cause severe consequences. Related to this I learnt that predicting the time that each part of a project will take is very difficult and it is therefore important to be both conservative and realistic about the number of things that will go wrong. Finally, I learnt that you should seek advice as soon as there are signs of trouble, rather than waiting for a scheduled meeting to brings something up. The advice of experienced supervisors can turn the seemingly catastrophic into a minor disruption.
 
 \section{Future Work}
 
-\mytodo{Sum up main results of the dissertation}
+There is still much work to be done in the field of ORAM. One of the main drawbacks of current schemes is that the size of the ORAM must be determined in advance and the overhead associated with expanding it is enormous. I would like to investigate the possibility of creating a resizable version of my implementation, however this was unfortunately not in the scope of this project.
 
+There are also many optimisations to be performed on this implementation. Along with many interesting optimisations mentioned in the literature, there is of course plenty of room for analysis and optimisation of this specific implementation using benchmarking to identify code hot-spots. This would of course only reduce the constants involved in the performance, rather than providing an asymptotic improvement.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % the bibliography
