@@ -19,8 +19,8 @@
 \usepackage{tabularx}
 \usepackage[numbers]{natbib}
 \usepackage{tikz}
-\usepackage{svg}
-\usetikzlibrary{trees}
+\usepackage{subcaption}
+\usetikzlibrary{trees,calc,chains,matrix,positioning,scopes,arrows}
 
 %%%%%%% Using Minted Package for Code Listings %%%%%%%
 \usepackage{minted}
@@ -115,8 +115,8 @@ extent for a comparable purpose.
 
 \listoffigures
 
-\todototoc
-\listoftodos
+%\todototoc
+%\listoftodos
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % now for the chapters
@@ -381,117 +381,125 @@ The next chapter will show how all of this information was used to achieve the a
 
 \chapter{Implementation}
 
-This chapter describes the process that took the designs and algorithms of the previous chapter and turned them into a functioning system. As it is the core of the project, the implementation of Path ORAM is discussed first (\cref{sec:pathORAM}), followed by the file system (\cref{sec:fileSystem}), the search module (\cref{sec:searchmodule}) and finally encryption (\cref{sec:encryption}).
+This chapter describes the process that took the designs and algorithms of the previous chapter and turned them into a functioning system. An overview of the implemented system is given in \cref{fig:systemOverview}. The structure of the text will follow the structure of this diagram, working up from the bottom. We thus start with a discussion of encryption in \cref{sec:encryption}, then we have a longer discussion of ORAM in \cref{sec:pathORAM}, because this is the main focus of the project. Following that we discuss the file system and the search module in \cref{sec:fileSystem,sec:searchmodule} respectively.
+
+Looking at \cref{fig:systemOverview}, we can summarise the major challenges of the implementation. At the highest level, the plumbing together of all the parts of the system required careful API design and some intricate usage of the powerful OCaml module system. Choosing a library to use for the encyption module was an important decision and I actually ended up filing a pull request to fix an important bug. The ORAM module presented many challenges, not least of which was simply understanding the Path ORAM protocol and translating its terse pseudocode into a fully functioning program. Adding recursion to this implementation required an even deeper understanding of the module system, including first class modules. The implementation of a minimal, but complete, inode-based file system, required appreciation of the choices made by many file system designer before me, and the realisation of a B-Tree library in OCaml, which did not exist before. Finally the search module leveraged many concepts from the field of information retrieval, including algorithms and data structures, but also an appreciation of the trade-offs that must be made between the space used and the precision of the indexing process.
+
+%As it is the core of the project, the implementation of Path ORAM is discussed first (\cref{sec:pathORAM}), followed by the file system (\cref{sec:fileSystem}), the search module (\cref{sec:searchmodule}) and finally encryption (\cref{sec:encryption}).
 
 % Describe what was actually implemented
 
-\section{Path ORAM}
-\label{sec:pathORAM}
+\begin{figure}
+    \centering
+    \tikzstyle{function}=[draw=blue!50,thick,fill=blue!20,minimum width=30mm,minimum height=10mm]
+    \tikzstyle{function3high}=[function,minimum height=42.3mm]
+    \tikzstyle{function2wide}=[function,minimum width=70mm]
+    \tikzstyle{nofunction}=[minimum width=30mm,minimum height=10mm]
+    \tikzstyle{data}=[function,draw=red!50,fill=red!20]
+    \tikzstyle{module}=[draw,inner sep=0,row sep=6mm,column sep=10mm,ampersand replacement=\&]
+    \scalebox{0.9}{
+    \begin{tikzpicture}[thick]
+        \matrix (search) [module] {
+          \node[nofunction] (m00) {Read File}; \&
+          \node[nofunction] (m01) {Write File}; \&
+          \node[function] (m02) {Search}; \\
+          \node[nofunction] (m10) {Read File}; \&
+          \node[nofunction] (m11) {Index}; \&
+          \node[data] (m12) {Index}; \\
+          \node[nofunction] (m20) {Read File}; \&
+          \node[nofunction] (m21) {Write File}; \&
+          \node[function] (m22) {Flush}; \\
+        };
+        \node[font=\large] at ($(search) - (75mm,0)$) {Search};
+        \node[function3high] (readfile) at ($(m10) + (0.15mm,0)$) {Read File};
+        \node[function3high] (writefile) at ($(m11) + (0.15mm,0)$) {Write File};
+        \matrix (fs) at ($(search) - (0,55mm)$) [module] {
+          \node[nofunction] (m30) {Read File}; \&
+          \node[nofunction] (m31) {Write File}; \&
+          \node[data] (m32) {Free Map}; \\
+          \node[nofunction] (m40) {Read File}; \&
+          \node[nofunction] (m41) {Write File}; \&
+          \node[data] (m42) {Inode Index}; \\
+          \node[nofunction] (m50) {Read}; \&
+          \node[nofunction] (m51) {Write}; \&
+          \node[function] (m52) {Flush}; \\
+        };
+        \node[font=\large] at ($(fs) - (75mm,0)$) {File System};
+        \node[function3high] at ($(m40) + (0.15mm,0)$) {Read File};
+        \node[function3high] at ($(m41) + (0.15mm,0)$) {Write File};
+        \matrix (oram) at ($(fs) - (0,55mm)$) [module] {
+          \node[function] (m60) {Read}; \&
+          \node[function] (m61) {Write}; \&
+          \node[data] (m62) {Position Map}; \\
+          \node[nofunction] (m70) {Access}; \&
+          \node[nofunction] (m71) {Access}; \&
+          \node[data] (m72) {Stash}; \\
+          \node[function] (m80) {Read Bucket}; \&
+          \node[function] (m81) {Write Bucket}; \&
+          \node[function] (m82) {Flush}; \\
+        };
+        \node[font=\large] at ($(oram) - (75mm,0)$) {ORAM};
+        \node[function2wide] (funcaccess) at ($(m70) + (20.15mm,0)$) {Access};
+        \matrix (enc) at ($(oram) - (0,55mm)$) [module] {
+          \node[function] (m90) {Read}; \&
+          \node[function] (m91) {Write}; \\
+          \node[nofunction] (mA0) {Encrypt}; \&
+          \node[nofunction] (mA1) {Encrypt}; \\
+          \node[function] (mB0) {Read}; \&
+          \node[function] (mB1) {Write}; \\
+        };
+        \node[font=\large] at ($(enc) - (75mm,0)$) {Encryption};
+        \node[function2wide] (funcenc) at ($(mA0) + (20.15mm,0)$) {Encrypt};
+        \matrix (disk) at ($(enc) - (0,40mm)$) [module] {
+          \node[function] (mC0) {Read}; \&
+          \node[function] (mC1) {Write}; \\
+        };
+        \node[font=\large] at ($(disk) - (75mm,0)$) {Disk};
+        \draw[->] ($(m01) + (0,15mm)$) -- (m01);
+        \draw[->] (m11) -- (m12);
+        \draw[->] (m21) -- (m31);
+        \draw[->] (m51) -- (m61);
+        \draw[->] (m61) -- (funcaccess);
+        \draw[->] (funcaccess) -- (m81);
+        \draw[->] (m81) -- (m91);
+        \draw[->] (m91) -- (funcenc);
+        \draw[->] (funcenc) -- (mB1);
+        \draw[->] (mB1) -- (mC1);
+        \draw[->] (mC0) -- (mB0);
+        \draw[->] (mB0) -- (funcenc);
+        \draw[->] (funcenc) -- (m90);
+        \draw[->] (m90) -- (m80);
+        \draw[->] (m80) -- (funcaccess);
+        \draw[->] (funcaccess) -- (m60);
+        \draw[->] (m60) -- (m50);
+        \draw[->] (m30) -- (m20);
+        \draw[->] (m00) -- ($(m00) + (0,15mm)$);
+        \draw[->] (m02) -- ($(m02) + (0,15mm)$);
+        \draw[->] (m12) -- (m02);
+        \draw[->] (m12) -- (m22);
+        \draw[->] (m22) -- (m31);
+        \draw[<->] ($(m41.east) + (0,2mm)$) -- (m32);
+        \draw[<->] (m41) -- (m42);
+        \draw[->] (m32) to [bend left=90] (m52);
+        \draw[->] (m42) -- (m52);
+        \draw[->] (m52) -- (m61);
+        \draw[<->] (funcaccess) -- (m62);
+        \draw[<->] (funcaccess) -- (m72);
+        \draw[->] (m62) to [bend left=90] (m82);
+        \draw[->] (m72) -- (m82);
+        \draw[->] (m82) -- (m91);
+    \end{tikzpicture}}
+    \caption{An overview of the system, showing the flow of data. Black boxes are modules, blue are functions, and red are data structures.}
+    \label{fig:systemOverview}
+\end{figure}
 
-The structure of Path ORAM is described abstractly in \cref{sec:oramintro}, in terms of the core data structures and the access algorithm. In this section we discuss how those data structures were realised and the design decisions involved in the implementation.
+\section{Encryption}
+\label{sec:encryption}
 
-\subsection{Inherent Constraints}
-\label{subsec:constraints}
+The security of our entire system is dependent on the security of the underlying encryption layer. Without encryption the ORAM construction is completely superfluous, thus we want to use tested and trusted cryptographic libraries, rather than rolling our own. Luckily for us, there is an existing implementation of an encrypted block device satisfying Mirage's \texttt{BLOCK} interface. It provides a functor, a module parameterised in another module. This functor takes an implementation of a block device, satisfying the \texttt{BLOCK} interface, and returns a new module, also satisfying the same interface. This is very similar to the way that ORAM is implemented, and allows us to chain together the application of this functor with the ones used in ORAM to get an encrypted block device. To create the encrypted block device and later connect to it, we need to provide a key. Key management is a very important problem, but it is left out of the scope of this project. For our purposes we use a constant, known key throughout the evaluation stage of the project.
 
-By virtue of writing an implementation to satisfy an existing module signature, there are a number of constraints put on the design of our system.
-
-The first major constraint is the use of the Cstruct library, discussed in \cref{subsec:libraries}. The underlying block device requires a buffer of type \texttt{Cstruct.t} to read to/write from and in order to satisfy the \texttt{BLOCK} module signature, ORAM needs to return data as a \texttt{Cstruct.t}. Thus, to avoid unnecessary conversions, we will pass our data around in this form.
-
-Another constraint is the usage of \texttt{int64} as the type of addresses in \texttt{BLOCK}'s, \texttt{read} and \texttt{write} operations. Again, to avoid unnecessary (and potentially unsafe) work converting between types, we will use \texttt{int64}s wherever necessary.
-
-\subsection{Stash}
-
-The stash stores blocks of data temporarily before they are written back into ORAM. It needs to support operations of insertion, lookup based on address and removal. For this job I chose an \texttt{int64}-keyed hash table from Jane Street's Core library, with \texttt{Cstruct.t} values. This was put into its own module, abstracting away the underlying type, meaning that we could swap implementations of the Stash module without breaking the core code of the ORAM module.
-
-The hash table gives us constant time for the operations of insertion, lookup and removal, making it ideal for our needs. The hash table implementation takes an initial size as a parameter, and expands when necessary. This would add a large overhead, because we would have to copy the entire contents of the stash. However, as shown in \citet{stefanov2013path}, we require exactly $Z\log_2N$ transient storage, where $N$ is the size of the ORAM in blocks, and on top of that, we require a constant amount of space for persistent stash storage. \Cref{tab:stashsizes} shows the maximum stash size required depending on the security parameter, $\lambda$, and the bucket size $Z$. A stash with security parameter $\lambda$ has probability $2^{-\lambda}$ of exceeding this stash size.
-
-In order to achieve statelessness, we need to be able to write the stash to disk, so there is going to be a trade-off between maximum stash size and security parameter. A larger maximum stash size increases bandwidth, but a security parameter set too low will not allow us to allocate the storage space for the stash in advance. For the purposes of this project, we will parameterise in both bucket size and security parameter, allowing us to discover empirically the values that optimise the construction.
-
-\begin{table}
-\centering
-\begin{tabular}{|l|l|l|l|}
-	\hline
-	& \multicolumn{3}{c|}{Bucket Size ($Z$)} \\
-	\cline{2-4}
-	Security Parameter ($\lambda$) & 4 & 5 & 6 \\
-	\cline{2-4}
-	& \multicolumn{3}{c|}{Max Stash Size} \\
-	\hline
-	80 & 89 & 63 & 53 \\
-	\hline
-	128 & 147 & 105 & 89 \\
-	\hline
-	256 & 303 & 218 & 186 \\
-	\hline
-\end{tabular}
-\caption{Empirical results for maximum persistent stash size from \citet{stefanov2013path}}
-\label{tab:stashsizes}
-\end{table}
-
-\subsection{Position Map}
-
-The position map associates a leaf position with each address of the data. As mentioned in \cref{subsec:constraints}, we are constrained to using \texttt{int64} addresses, thus we need to be able to support a position map that is indexed by 64-bit integers. OCaml provides us with a Bigarray module, but the size of these arrays is specified using the OCaml \texttt{int} type. This type actually uses only 63 bits on a 64-bit machine and 31 on a 32-bit machine. Both of these types are also signed, so we need to represent a type that can range up to $2^{63} - 1$, using a type that can only go up to $2^{30} - 1$ on a 32-bit machine.
-
-In order to do this we need to use 3-dimensional arrays. We take an \texttt{int64} value and split its bits into a 4-bit value and 2 30-bit values. The 4-bit value is the most significant bits, and will therefore be 0 unless we store more than $2^{60}$ blocks. The 30-bit values are guaranteed to be converted into positive \texttt{int}s, which we can then use to address two dimensions of the array. We have to perform some input sanitation to make sure that the 4-bit value (and therefore the 64-bit value) is positive.
-
-Now the only remaining problem is creating the position map. \Cref{alg:posmapdims} shows how we translate from a desired \texttt{int64} size to the dimensions of a three dimensional array. After splitting the \texttt{int64} as described above, we must add one to the first two dimensions, because we always want them to be at least of size 1. If a higher dimension is greater than 1, then all lower dimensions become their maximum value, in this case $2^{30}-1$. We can now create an array using these values that is guaranteed to be at least the size that we require on both 32-bit and 64-bit machines.
-
-\begin{algorithm}
-\caption{Calculate the dimensions of a 3D array given total desired size}
-\label{alg:posmapdims}
-\footnotesize
-\begin{algorithmic}[1]
-\vskip 10pt
-\Require{$\mathsf{size} > 0$}
-\vskip 10pt
-\Function{PosMapDims}{$\mathsf{size}$}
-\vskip 10pt
-	\State $(x, y, z) \gets$ \Call{SplitIndices}{$\mathsf{size}$}
-\vskip 10pt
-	\State $x \gets x + 1$
-	\State $y \gets y + 1$
-\vskip 10pt
-	\If{$x > 1$}
-		\State $y \gets \mathsf{0x3FFFFFFF}$
-		\State $z \gets \mathsf{0x3FFFFFFF}$
-	\ElsIf{$y > 1$}
-		\State $z \gets \mathsf{0x3FFFFFFF}$
-	\EndIf
-\vskip 10pt
-	\State \Return $(x,y,z)$
-\vskip 10pt
-\EndFunction
-\vskip 10pt
-\end{algorithmic}
-\end{algorithm}
-
-\subsection{Creating ORAM}
-
-We want ORAM to be able to replace any existing block device in any Mirage program. In order to do this we need access to the methods of the underlying block device as well as the block device itself. Thus, we need to build an ORAM functor, that takes a module satisfying the \texttt{BLOCK} interface, shown in \cref{lst:blocksig}, and gives us a new module satisfying the same interface.
-
-In order to get access to this underlying device, we need a \texttt{create} method, which takes a block device as input and returns something of type \texttt{Oram.Make(B).t}, shown in \cref{lst:orammaketype}. This type contains the ORAM parameters such as \texttt{bucketSize} and \texttt{offset}, structural information such as the \texttt{height} of the ORAM and the \texttt{numLeaves}, and pointers to the stash, position map, and underlying block device.
-
-The following parameters are passed as input to the \texttt{create} method, along with the block device:
-
-\begin{description}
-  \item[\texttt{size}] The desired size of the ORAM in blocks
-  \item[\texttt{blockSize}] The desired size of a single block in bytes
-  \item[\texttt{bucketSize}] The number of blocks in a bucket
-\end{description}
-
-Using these, the \texttt{create} method can calculate new structural information. First we need to calculate the number of sectors required for a block as $$\mathtt{sectorsPerBlock} = \frac{\mathtt{blockSize} - 1}{\mathtt{sector\_size}} + 1,$$ which rounds up the number of sectors so we can always fit the desired block size. Next, we calculate the sector size of the ORAM as $$\mathtt{sector\_size} = \mathtt{sector\_size} \times \mathtt{sectorsPerBlock} - 8,$$ which is the block size, minus 8 bytes for the address, which needs to be stored along with the data. Now we can calculate the height of the ORAM, but we need to consider two cases. If the desired size of the ORAM is specified, then we simply calculate the height as $$\mathtt{height} = \left\lfloor \log_2\left(\frac{\mathtt{size}}{\mathtt{bucketSize}} + 1\right)\right\rfloor - 1.$$ This comes from rearranging the equation for the size of the binary tree, $2^{\mathtt{height} + 1} - 1$, introducing the floor operator so that the resulting binary tree is less than or equal to the desired size. If the size is unspecified, we assume that we should fill as much of the device as possible, so we calculate $$\mathtt{size} = \frac{\mathtt{size\_sectors}}{\mathtt{sectorsPerBlock}}$$ and then perform the same calculation as above with this new value. Finally we calculate, \texttt{numLeaves} and a new value for \texttt{size\_sectors} trivially.
-
-This is all of the structural information we require, so now we only have a couple of things left to do. We must create instances of the client-side data structures and we must initialise the ORAM space. The first simply calls the creation functions of the associated data structures. The second loops through the block device, writing dummy blocks to every location. Dummy blocks have address -1, and are ignored by the access protocol. Now we can return everything that we have as an instance of \texttt{ORAM.Make(B).t}.
-
-\begin{listing}[h]
-\caption{The type of an ORAM device \texttt{ORAM.Make(B).t}}
-\label{lst:orammaketype}
-\inputminted[fontsize=\scriptsize,firstline=27, lastline=58]{ocaml}{../mirage-oram/lib/oram.ml}
-\end{listing}
-
-
-\begin{listing}
-\caption{Mirage BLOCK module signature}
+\begin{listing}[t]
+\caption{Mirage \texttt{BLOCK} module signature}
 \label{lst:blocksig}
 \vskip 10pt
 \begin{minted}[fontsize=\scriptsize,breaklines]{ocaml}
@@ -530,13 +538,122 @@ end
 \end{minted}
 \end{listing}
 
+\section{Path ORAM}
+\label{sec:pathORAM}
+
+The structure of Path ORAM is described abstractly in \cref{sec:oramintro}, in terms of the core data structures and the access algorithm. In this section we discuss how those data structures were realised and the design decisions involved in the implementation.
+
+\subsection{Inherent Constraints}
+\label{subsec:constraints}
+
+By virtue of writing an implementation that satisfies an existing module signature, there are a number of constraints put on the design of our system.
+
+The first major constraint is the use of the Cstruct library, introduced in \cref{subsec:libraries}. The underlying block device requires a buffer of type \texttt{Cstruct.t} to read from/write to, and in order to satisfy the \texttt{BLOCK} module signature, ORAM needs to return data as a \texttt{Cstruct.t}. Thus, to avoid unnecessary marshalling of data, we will pass our data around in this form.
+
+Another constraint is the usage of \texttt{int64} as the type of addresses in \texttt{BLOCK}'s, \texttt{read} and \texttt{write} operations. Again, to avoid unnecessary (and potentially unsafe) work converting between types, we will use \texttt{int64}s wherever possible.
+
+\subsection{Stash}
+\label{subsec:stashImpl}
+
+The stash stores blocks of data temporarily before they are written back into ORAM. It needs to support operations of insertion, lookup based on address, and removal. For this job I chose an \texttt{int64}-keyed hash table from Jane Street's Core library, with \texttt{Cstruct.t} values. This was put into its own module, abstracting away the underlying type, meaning that we could swap implementations of the stash module without breaking the core code of the ORAM module.
+
+The hash table gives us constant time for the operations of insertion, lookup and removal, making it ideal for our needs. The hash table implementation takes an initial size as a parameter, and expands when necessary. This would add a large overhead, because we would have to copy the entire contents of the stash. However, as shown in \citet{stefanov2013path}, we require exactly $Z \cdot (L +1)$ blocks of transient storage, for a tree of height $L$ and bucket size $Z$, and on top of that, we require a constant amount of space for persistent stash storage. \Cref{tab:stashsizes} shows the maximum stash size required depending on the security parameter, $\lambda$, and the bucket size $Z$. A stash with security parameter $\lambda$ has probability $2^{-\lambda}$ of exceeding this stash size.
+
+In order to achieve statelessness, we need to be able to write the stash to disk, but we want our security parameter to be high enough that we have long term security. We must make a trade-off between security and speed, which we can do by keeping the security parameter high and reducing the size of a block. As we have just seen there is a constant maximum number of blocks in the stash, so reducing the block size will have a direct affect on the time taken for each access.
+
+\begin{table}
+\centering
+\begin{tabular}{|l|l|l|l|}
+	\hline
+	& \multicolumn{3}{c|}{Bucket Size ($Z$)} \\
+	\cline{2-4}
+	Security Parameter ($\lambda$) & 4 & 5 & 6 \\
+	\cline{2-4}
+	& \multicolumn{3}{c|}{Max Stash Size} \\
+	\hline
+	80 & 89 & 63 & 53 \\
+	\hline
+	128 & 147 & 105 & 89 \\
+	\hline
+	256 & 303 & 218 & 186 \\
+	\hline
+\end{tabular}
+\caption{Empirical results for maximum persistent stash size from \citet{stefanov2013path}}
+\label{tab:stashsizes}
+\end{table}
+
+\subsection{Position Map}
+
+The position map associates a leaf position with each block of the data. As mentioned in \cref{subsec:constraints}, we are constrained to using \texttt{int64} block addresses, thus we require a position map that is indexed by 64-bit integers. OCaml provides us with a Bigarray module, but the size of these arrays is specified using the OCaml \texttt{int} type. This type actually uses only 63 bits on a 64-bit machine and 31 on a 32-bit machine. Both of these types are also signed, so we need to represent a type that can range up to $2^{64} - 1$, using a type that can only go up to $2^{30} - 1$ on a 32-bit machine.
+
+To accommodate this, we can use 3-dimensional arrays. We take an \texttt{int64} value and split its bits into a 4-bit value and 2 30-bit values. The 4-bit value consists of the 4 most significant bits, and will therefore have a value of 0 unless we store more than $2^{60}$ blocks. The 30-bit values are guaranteed to be converted into non-negative \texttt{int}s, which we can then use to address two dimensions of the array.
+
+Now the only remaining problem is creating the position map. \Cref{alg:posmapdims} shows how we translate from a desired \texttt{int64} size to the dimensions of a three dimensional array. After splitting the \texttt{int64} as described above, we must add one to the first two dimensions, because we always want them to be at least of size 1. If a higher dimension is greater than 1, then all lower dimensions become their maximum value, in this case $2^{30}-1$. We can now create an array using these values that is guaranteed to be at least the size that we require on both 32-bit and 64-bit machines.
+
+\begin{algorithm}[t]
+\caption{Calculate the dimensions of a 3D array given total desired size}
+\label{alg:posmapdims}
+\footnotesize
+\begin{algorithmic}[1]
+\vskip 10pt
+\Require{$\mathsf{size} > 0$}
+\vskip 10pt
+\Function{PosMapDims}{$\mathsf{size}$}
+\vskip 10pt
+	\State $(x, y, z) \gets$ \Call{SplitIndices}{$\mathsf{size}$}
+\vskip 10pt
+	\State $x \gets x + 1$
+	\State $y \gets y + 1$
+\vskip 10pt
+	\If{$x > 1$}
+		\State $y \gets \mathsf{0x3FFFFFFF}$
+		\State $z \gets \mathsf{0x3FFFFFFF}$
+	\ElsIf{$y > 1$}
+		\State $z \gets \mathsf{0x3FFFFFFF}$
+	\EndIf
+\vskip 10pt
+	\State \Return $(x,y,z)$
+\vskip 10pt
+\EndFunction
+\vskip 10pt
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Creating ORAM}
+
+We want ORAM to be able to replace any existing block device in any Mirage program. In order to do this we need access to the methods of the underlying block device as well as the block device itself. Thus, we need to build an ORAM functor, that takes a module satisfying the \texttt{BLOCK} interface, shown in \cref{lst:blocksig}, and gives us a new module satisfying the same interface.
+
+In order to get access to this underlying device, we need a \texttt{create} method, which takes a block device as input and returns something of type \texttt{Oram.Make(B).t}, shown in \cref{lst:orammaketype}. This type contains the ORAM parameters such as \texttt{bucketSize} and \texttt{blockSize}, structural information such as the \texttt{height} of the ORAM and the \texttt{numLeaves}, and pointers to the stash, position map, and underlying block device.
+
+The following parameters are passed as input to the \texttt{create} method, along with the block device:
+
+\begin{description}
+  \item[\texttt{size}] The desired size of the ORAM in blocks
+  \item[\texttt{blockSize}] The desired size of a single block in bytes
+  \item[\texttt{bucketSize}] The number of blocks in a bucket
+\end{description}
+
+Using these, the \texttt{create} method can calculate new structural information. The \texttt{BLOCK} interface defines the size of the block device in sectors, using the variable \texttt{size\_sectors}, and defines the size of a sector using \texttt{sector\_size}. We will continue to refer to data blocks in ORAM as blocks, but to satisy \texttt{BLOCK}, we will need to expose a value for \texttt{sector\_size}. First we need to calculate the number of sectors required for a block as $$\mathtt{sectorsPerBlock} = \frac{\mathtt{blockSize} - 1}{\mathtt{sector\_size}} + 1,$$ which rounds up the number of sectors so we can always fit the desired block size. Now, the \texttt{sector\_size} that ORAM uses is the size of the part of the block that stores data. Thus, we must subtract the size of the address, 8 bytes, giving $$\mathtt{sector\_size} = \mathtt{sector\_size} \times \mathtt{sectorsPerBlock} - 8,$$
+
+Now we can calculate the height of the ORAM, but we need to consider two cases. If the desired size of the ORAM is specified, then we simply calculate the height as $$L = \left\lfloor \log_2\left(\frac{N}{Z} + 1\right)\right\rfloor - 1.$$ This comes from rearranging the equation for the size of the binary tree in buckets, $2^{L + 1} - 1$, introducing the floor operator so that the resulting binary tree is less than or equal to the desired size, so that it will definitely fit on the block device. If the size is unspecified, we assume that we should fill as much of the device as possible, so we calculate $$N = \frac{\mathtt{size\_sectors}}{\mathtt{sectorsPerBlock}}$$ and then perform the same calculation as above with this new value. Finally we calculate, \texttt{numLeaves} and a new value for \texttt{size\_sectors} from $L$ using the equations we have already seen.
+
+This is all of the structural information we require, so finally we must create instances of the client-side data structures and we must initialise the ORAM space. To do the former we call the creation functions of the associated data structures. For the latter, we loop through the block device, writing dummy blocks to every location. Dummy blocks have address $-1$, and are ignored by the access protocol. Now we can return everything that we have as an instance of \texttt{ORAM.Make(B).t}.
+
+\begin{listing}[t]
+\caption{The type of an ORAM device \texttt{ORAM.Make(B).t}}
+\label{lst:orammaketype}
+\inputminted[fontsize=\scriptsize,firstline=87, lastline=118]{ocaml}{../mirage-oram/lib/oram.ml}
+\end{listing}
+
+
+
 \subsection{Accessing ORAM}
 
 Now that we have the client-side data structures and our ORAM module, we can almost implement \cref{alg:access}. Before we can though, we need the surrounding plumbing. The \texttt{BLOCK} interface functions \texttt{read} and \texttt{write} input/output data as a list of \texttt{Cstruct.t}s, so they must split this into chunks before calling \texttt{access} on each one. On the other side of access, we need the subroutines \textsc{ReadBucket} and \textsc{WriteBucket}, which access the underlying block storage.
 
 It is the second two of these plumbing functions that have a much more interesting role. They are actually responsible for maintaining the logical binary tree structure. There are no physical pointers, but instead the structure is built purely through calculating the appropriate address of a bucket. The bucket on the path to leaf $x$ at level $l$ is calculated using \cref{alg:bucketaddress}.
 
-\begin{algorithm}[ht]
+\begin{algorithm}[t]
   \footnotesize
   \begin{algorithmic}
   \vskip 10pt
@@ -559,7 +676,7 @@ It is the second two of these plumbing functions that have a much more interesti
 
 This is most easily explained using \cref{fig:bucketaddress}. Here we can see the nodes labelled in order of their position in memory. The leaves are also labelled, but the binary representations of these labels are actually more important. The binary representation, read from left to right, tells us how to reach the leaf. To get to leaf 5, with binary representation 101, we go right, left, right. When we go left, we double the label on the node and add one, and when we go right, we add two. Multiplying this node label by the block size and the bucket size gives us the physical address of the node. So for a node at level $l$, we only compare the first $l$ bits, following the procedure above.
 
-\begin{figure}[ht]
+\begin{figure}[t]
     \centering
     \begin{tikzpicture}[level/.style={sibling distance=75mm/#1},
         level 3/.style={sibling distance=18mm},
@@ -608,11 +725,11 @@ This is most easily explained using \cref{fig:bucketaddress}. Here we can see th
   \label{fig:bucketaddress}
 \end{figure}
 
-So we can now input/output data from the outside and the underlying block device. This leaves most of \cref{alg:access} fairly trivial to implement. Remapping the blocks requires a simple call to a pseudo-random function, reading in the path just adds the contents of each bucket to the stash, and writing new data is as simple as setting a value in the stash. The only interesting part left is lines 11-16. This is where we decide which blocks should be put into the path.
+With this plumbing in place, we can input/output data from the outside and the underlying block device. Now we can implement \cref{alg:access}. Remapping the blocks requires a call to a pseudo-random function, reading in the path adds the contents of each bucket to the stash, and writing new data looks up a block in the stash and gives it a new data value. The final part is lines 11-16. This is where we decide which blocks should be put into the path.
 
-The naive implementation of this, and that suggested by \cref{alg:access}, loops through the stash and finds blocks such that the bucket at level $l$ on the path to leaf $\mathsf{position[a']}$ is the same as the bucket at level $l$ on the path to leaf $x$. There are two small optimisations we can make here. The first is to perform the position lookup only once, attaching positions to the blocks in a temporary data structure, avoiding repeated work at each level. The second avoids calculating the bucket addresses entirely. We can do this by noting that in order for the paths to two leaves to intersect at level $l$, the leaves must have the same first $l$ bits. Thus, we can simply perform a right bit shift on both $x$ and $\mathsf{position[a']}$ of $\mathtt{height} - l$ bits, and check for equality.
+The naive implementation of this, and that suggested by \cref{alg:access}, loops through the stash and finds blocks such that the bucket at level $l$ on the path to leaf $\mathsf{position[a']}$ is the same as the bucket at level $l$ on the path to leaf $x$. There are two small optimisations we can make here. The first is to perform the position lookup only once, attaching positions to the blocks in a temporary data structure, avoiding repeated work at each level. The second avoids calculating the bucket addresses entirely. We can do this by noting that in order for the paths to two leaves to intersect at level $l$, the leaves must have the same first $l$ bits. Thus, we can perform a right bit shift on both $x$ and $\mathsf{position[a']}$ of $\mathtt{height} - l$ bits, and check for equality.
 
-So at this point we have a functioning ORAM functor, that can be used to augment a block device in any Mirage program. In \cref{subsec:recursion,subsec:statelessness,subsec:oramoptimisation} we look at optimisations and extensions to this ORAM construction, before moving onto to the further aims of the project.
+We now have a functioning ORAM functor, that can be used to augment a block device in any Mirage program. In \cref{subsec:recursion,subsec:statelessness} we look at optimisations and extensions to this ORAM construction, before moving onto to the further aims of the project.
 
 %\begin{listing}[h]
 %	\caption{Implementation of \cref{alg:access}}
@@ -623,13 +740,11 @@ So at this point we have a functioning ORAM functor, that can be used to augment
 \subsection{Recursion}
 \label{subsec:recursion}
 
-The essence of recursive ORAM, is that the position map of one ORAM is another ORAM. Thus, we can extend our original ORAM functor, parameterising it in the implementation of the position map. To do this we use a single interface, that is satisfied by both the in memory position map and the ORAM module. We can apply this new ORAM functor with the in memory position map module to get our original construction. However, we can now take this further, applying the functor again with the result of the first application, and this can be done to an arbitrary depth. Recursion has been made easy using the power of OCaml's module system.
+The essence of recursive ORAM, is that the position map of one ORAM is another ORAM. Thus, we can extend our original ORAM functor, parameterising it in the implementation of the position map. To do this we use a single interface, that is satisfied by both the in memory position map and the ORAM module. We can apply this new ORAM functor with the in memory position map module to get our original construction. However, we can now take this further, applying the functor again with the result of the first application, and this can be done to an arbitrary depth. This is an exhibition of the power of OCaml's module system.
 
-There is of course hidden complexity here. How do we create a recursive ORAM? We definitely can't assume that the data ORAM can use the whole of the disk anymore, so we will have to do some calculations. How do we initialise recursive ORAM? How do we actually use ORAM as a position map? We will examine all of these now.
+We can use the method above to build the recursive ORAM module by hand, applying the functor $n + 1$ times for $n$ levels of recursion. However, it is better to have a more automatic solution, where the recursive module is built automatically based on the size of the data ORAM, ORAM$_0$. Our addresses are 64-bit integers, so they take 8 bytes of storage each. If ORAM$_0$ has size $N$ in blocks, and the size of each block is $B$ bytes, then one block in ORAM$_1$ being used as the position map for ORAM$_0$ can store $\chi = B / 8$ addresses. The number of blocks required for ORAM$_1$ will therefore be $N / \chi$. After $\log N / \log \chi$ recursions, we will have a constant sized position map.
 
-\mytodo{In particular talk about/show maths involved in automatically determining optimal size/number of levels of recursion}
-
-% Talk about wanting to have automatic recursion, and the constraints of the type system
+So, to create a recursive ORAM, we take in the size, $N$, and the block size, $B$, and automatically apply the ORAM functor recursively $\log N / \log \chi$ times. Calling the $\mathtt{create}$ function of the resulting module will create ORAM instances with the correct number of levels of recursion.
 
 \subsection{Statelessness}
 \label{subsec:statelessness}
@@ -675,7 +790,7 @@ In order to allocate space efficiently, we can simply use an array of bits the s
 
 The \texttt{Cstruct} library performs data access in bytes. This leads us to \cref{alg:bitgetset} for getting and setting individual bits. To get the $n^{th}$ bit, we must get the $\frac{n}{8}^{th}$ byte and extract it from there. To do this, we calculate the index of the bit in the byte, shift a 1 to that position, and perform an and, masking that bit. Setting is a similar operation, but seeks to preserve the surrounding bits. To set a 1, we calculate the index of the bit in the byte, shift a 1 to that position, and perform an or, preserving all other bits. Setting a 0 is slightly trickier. We want to perform an and with a bit string that is 0 at the desired position and 1 everywhere else, but shifting fills empty bits with 0s. We can however use De Morgan's Law $$ a~\&\&~b = \neg (\neg a~||~\neg b) $$ to convert this to an operation involving a bit string that has a 1 at the desired position and 0s everywhere else.
 
-\begin{algorithm}[H]
+\begin{algorithm}[t]
 \caption{Getting and setting individual bits in a byte array}
 \label{alg:bitgetset}
 \begin{algorithmic}
@@ -727,15 +842,10 @@ We have three main operations that are the most important to support. Writing fi
 
 Writing files is the most important step, because this is where the search module does the indexing. On write, we first write through to the first system, then index the file and finally flush the index to disk to make sure it persists. Reading files is simply a pass through to the file system and search makes calls to inverted index.
 
-\section{Encryption}
-\label{sec:encryption}
-
-Encryption is something that it can be fatal to get wrong. In the case of ORAM, if you don't have encryption, it's completely superfluous. Thus, we want to use tested and trusted cryptographic libraries, rather than rolling our own. Luckily for us, there is an existing implementation of an encrypted block device satisfying Mirage's \texttt{BLOCK} interface, that provides a functor very similar to the ones that we created for ORAM. We simply have to chain together the application of this functor with the ones that we are already using to get an encrypted block device.
-
 \section{Summary}
 \label{sec:implSummary}
 
-In this chapter we have discussed the implementation of all of the components of our system, including the important design decisions and trade-offs that were made. We have seen how to implement recursive Path ORAM in a way that allows it to plug into existing MirageOS programs, and we have seen how to build a file system and search operations on top of it.
+In this chapter I have discussed the implementation of all of the components of my system, including the important design decisions and trade-offs that were made. We have seen how to implement recursive Path ORAM in a way that allows it to plug into existing MirageOS programs, and we have seen how to build a file system and search operations on top of it.
 
 We now move on to the important task of evaluation, where we make sure that I have implemented ORAM in a way that ensures functionality, performance, and security, and have therefore achieved the aims of the project.
 
@@ -765,14 +875,12 @@ We now move on to the important task of evaluation, where we make sure that I ha
 
 % Show specifically that with the entire access pattern, the server can infer which documents are returned by each query, and could therefore perform the attack described by Islam et al.
 
-This chapter explains the methodology used to ensure the correctness of the ORAM implementation, as well as analysing its performance and security properties. \Cref{sec:overallResults} gives a summary of the results and compares them with expectations. \Cref{sec:unitTests} discusses functional testing through the use of Unit Testing and Randomised Testing. \Cref{sec:performanceTesting} then goes on to discuss performance, and then finally we analyse the security of ORAM in \cref{sec:securityAnalysis}.
+This chapter explains the methodology used to ensure the correctness of the ORAM implementation, as well as analysing its performance and security properties. \Cref{sec:overallResults} gives a summary of the results and compares them with expectations. \Cref{sec:unitTests} discusses functional testing through the use of Unit Testing and Randomised Testing. \Cref{sec:performanceTesting} then goes on to discuss performance, and then finally we analyse the security of ORAM in \cref{sec:statisticalAnalysis}.
 
 \section{Overall Results}
 \label{sec:overallResults}
 
-Overall, ORAM performed as expected in terms of functionality, performance, and security. It operated correctly, writing files and reading the same data back out. It continued to do so with the additions of statelessness, recursion, and encryption, so all parts of the system were functional separately and as a whole. In terms of performance, my implementation agreed with the theoretical bounds given in \citet{stefanov2013path}, which state $O(\log N)$ time overhead, $O(\log N)$ client-side storage in the non-recursive case, and $O(1)$ client-side storage in the recursive case. The value of the constant in the last instance was given based on empirical results, and my result (dis)agreed with this, how? Finally, the security analysis showed that ORAM did indeed have a statistically random access pattern, ensuring the security of the implementation.
-
-\mytodo{Tweak this based on actual results}
+Overall, ORAM performed as expected in terms of functionality, performance, and security. It operated correctly, writing files and reading the same data back out. It continued to do so with the additions of statelessness, recursion, and encryption, so all parts of the system were functional separately and as a whole. In terms of performance, my implementation agreed with the theoretical bounds given in \citet{stefanov2013path}, which state $O(\log N)$ time overhead. Finally, statistical analysis showed that ORAM did indeed have a statistically random access pattern, ensuring the security of the implementation.
 
 \section{Unit Tests}
 \label{sec:unitTests}
@@ -838,7 +946,8 @@ The search module was tested for correctness, i.e. if a file containing a word h
 Before performing the main experiments, I decided to optimise the parameters of ORAM, in order to allow the experiments to run faster. The main parameter in question is the block size, which has been shown in \citet{ousterhout1985trace} to dramatically affect the speed of IO operations. I discovered that this was indeed the case with ORAM, as can be seen in \cref{fig:blockSizeResults}. It appeared that increasing the block size has an unbounded increase on performance, but I settled with a block size of 1MB to trade-off between speed and the possibility to specify the size the block device.
 
 \begin{figure}
-    \scalebox{0.8}{\includegraphics{blockSizeResults}}
+    \centering
+    \includegraphics[width=.8\linewidth]{blockSizeResults}
     \caption{Plot of the time taken to transfer 80MB of data at varying block sizes and sizes of ORAM. Each line represents one ORAM size, so we can see that as block size increases, the time decreases.}
     \label{fig:blockSizeResults}
 \end{figure}
@@ -848,28 +957,65 @@ Before performing the main experiments, I decided to optimise the parameters of 
 
 In order to effectively test the overhead due to ORAM, two things needed to be done very carefully. The first was isolating and removing major sources of uncertainty. When I first ran the experiments, I attempted to run them on my local machine. In this environment, other processes interfered with the ORAM process, making the results unreliable. I secured a remote testing machine in order to run the experiments in complete isolation. Here, at first, they were running on an NFS mounted drive, meaning that network latency and protocol overheads were affecting the results. After moving the experiments to local disk, it was clear that ORAM overheads were finally dominating the results. Now, secondly, I needed to initialise the ORAMs properly. Using a fresh ORAM, the stash is empty and most of the blocks are dummy blocks that get disregarded. It is necessary to run an initialisation sequence in order to remove the effects of these on the results. We use the worst case sequence, writing each block in turn, then reading each block in turn, to ensure that all blocks get used multiple times, leaving the ORAM in a state that it would likely be in after extended use. Only once this steady state has been reached can we reliably test the performance.
 
-For the actual experiment, rather than using the worst case sequence, we use a random sequence of block accesses. We perform 10,000 iterations, oscillating between reads and writes in order to balance the different overheads. We are trying to see how the performance changes as the block size increases, so we use ORAMs of a range of sizes, from 12 blocks (a tree of depth 1) to 8188 blocks (a tree of depth 10). The log of the time taken for each ORAM to perform 10,000 iterations is plotted against the logarithm of the size of the ORAM in \cref{fig:timePlot}. We expect this to be a straight line, because we expect logarithmic overheads from ORAM, and we increase the block sizes roughly in powers of two.
+For the actual experiment, rather than using the worst case sequence, we use a random sequence of block accesses. We perform 10 runs of 1000 iterations each, oscillating between reads and writes in order to balance the different overheads. We are trying to see how the performance changes as the block size increases, so we use ORAMs of a range of sizes, from 12 blocks (a tree of depth 1) to 4092 blocks (a tree of depth 9). The log of the time taken for each ORAM to perform 1000 iterations is plotted against the logarithm of the size of the ORAM in \cref{fig:timeResults}. We expect this to be a straight line, because we expect logarithmic overheads from ORAM, and we increase the block sizes roughly in powers of two. We can see that ORAM does indeed show a logarithm overhead compared to the control experiment that performed the same sequence of accesses to a block device without ORAM. I performed the same experiment adding encryption to ORAM and we can see that the overhead was still logarithmic, but with a larger constant.
 
-\mytodo{Add further close analysis of the actual results}
+\begin{figure}
+    \centering
+    \includegraphics[width=.7\linewidth]{timeResults}
+    \caption{The relationship between size of an ORAM in blocks and the time taken for 1000 operations, plotted for ORAM, encrypted ORAM, and a control block device with no ORAM. We take logs of both axes, because block size was increased in powers of two and we expect a log relationship.}
+    \label{fig:timeResults}
+\end{figure}
 
-The initialisation phase allowed the stash size to reach a steady state, which resulted in a constant overhead of $x$ blocks, compared with $y$ predicted in \citet{stefanov2013path} for a security parameter, $\lambda = z$. This shows something...
+%The initialisation phase allowed the stash size to reach a steady state, which resulted in a constant overhead of $x$ blocks, compared with $y$ predicted in \citet{stefanov2013path} for a security parameter, $\lambda = z$. This shows something...
 
-In these first experiments, we used stateless, non-recursive ORAM, which means that the entire of the position map was being flushed to disk on every access. We now compare the time taken for stateless, recursive ORAM, to see what effect the additional recursive calls have compared to the reduction in the size of the client side state. We can see from \cref{fig:recursiveTimePlot} that overall this was good/bad to some degree.
+%In these first experiments, we used stateless, non-recursive ORAM, which means that the entire of the position map was being flushed to disk on every access. We now compare the time taken for stateless, recursive ORAM, to see what effect the additional recursive calls have compared to the reduction in the size of the client side state. We can see from \cref{fig:recursiveTimePlot} that overall this was good/bad to some degree.
 
-Although it has not been discussed here, bandwidth is another important measure when examining the performance of ORAM, especially when it is being used in the cloud. With more time, a detailed study of the bandwidth used with and without recursion would have been carried out, which would have given further insight into the trade-off that recursion presents us with. We also could have examined the proportion of the overall performance overhead that was contributed by encryption.
+Although it has not been discussed here, bandwidth is another important measure when examining the performance of ORAM, especially when it is being used in the cloud. With more time, a detailed study of the bandwidth used with and without recursion would have been carried out, which would have given further insight into the trade-off that recursion presents us with.
 
-\section{Security Analysis}
-\label{sec:securityAnalysis}
+\section{Statistical Analysis}
+\label{sec:statisticalAnalysis}
 
-In order to test the security of ORAM, we need to show that the access pattern observed by the block device is actually statistically random. Of course there is structure to this randomness, because on each access a whole path is read and written, but the actual path that gets written should be random. Thus, we should perform a test for randomness on an actual sequence of path indices. We are in effect testing OCaml's Random library for pseudo-randomness, because the security of our construction relies on it. Taking a 10,000 iteration pattern from the largest block device yielded the following results, that show that it is indeed random to within some significant statistical degree that I don't understand yet.
+In order to test the effectiveness of ORAM, we need to show that the access pattern observed by the block device is actually statistically random. Of course there is structure to this randomness, because on each access a whole path is read and written, but the actual path that gets written should be random. Thus, we should perform a test for randomness on a sequence of path indices.
 
-\mytodo{Redo this based on actual method and results}
+In order to do this we will use two common techniques: autocorrelation plotting and runs testing.
+
+Autocorrelation plotting plots the correlation of a sequence with itself at various time lags \cite{nistautocorr}. For a random sequence the noise cancels itself out, so we want to see a plot of values very close to zero, apart from at lag 0, where the correlation will be exactly the power of the signal. I plotted this for two access patterns, one of length 200 so that the results would be easily visible, and one of length 5,000 to show longer term effects. For both of these patterns, the underlying access pattern, the one that would be seen without ORAM, was simply a succession of reads and writes to the same location. These plots are shown in \cref{fig:shortAutocorr} and \cref{fig:longAutocorr} respectively.
+
+\begin{figure}
+    \centering
+    \begin{subfigure}{.45\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{shortAutocorr}
+        \caption{Autocorrelation of a 200 iteration access pattern}
+        \label{fig:shortAutocorr}
+    \end{subfigure}
+    \quad
+    \begin{subfigure}{.45\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{longAutocorr}
+        \caption{Autocorrelation of a 5,000 iteration access pattern}
+        \label{fig:longAutocorr}
+    \end{subfigure}
+    \caption{Two autocorrelation plots, with the autocorrelation coefficient on the y-axis and time lag on the x-axis. The dashed black lines represent confidence bands of 95\% and 99\%.}
+    \label{fig:autocorr}
+\end{figure}
+
+The dashed black lines represent confidence bands of 95\% and 99\%, and in order to conclude that a sequence is random, we need almost all of the autocorrelation coefficients to lie within these bands. This is indeed the case, so ORAM has successfully taken a heavily non-random access pattern and turned it into a random one.
+
+Runs testing attempts to detect non-random beheviour in a signal by counting the number of runs, sequences of values that are all above or below the median value. Too few runs in a sequence suggests a trend and too many runs suggests cyclic behaviour. For a large sample, we can approximate the distribution of runs using a normally distributed random variable, and compare this with the distribution that we measure. To generate the distribution, we take 1000 sample access patterns, each of length 180. We cut each pattern into 18 equally sized segments of size 10, take the mean of each segment, and count the number of runs in the sequence of means. There can be between 2 and 18 runs in each sequence, but we would expect 90\% of the sequences to have between 7 and 14 runs, the 0.05\% tail cut-offs for this distribution \cite{masliah2000stationarity}. \Cref{fig:runsTestPlot} plots this distribution, along with the tail cut-offs, and 92.2\% of samples fall within the bounds. Thus, we can conclude that the samples were generated from a random process.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=.8\linewidth]{runsTestPlot}
+    \caption{The distribution of the number of runs in 1000 access patterns of length 180. The dashed black lines represent 0.05\% tail cut-offs, and 92.2\% of values fall within these bounds.}
+    \label{fig:runsTestPlot}
+\end{figure}
 
 \chapter{Conclusions}
 
 \section{Results}
 
-\mytodo{Write the results section based on actual results}
+I successfully implemented the Path ORAM protocol and showed that my implementation agreed with the theoretical overhead of $O(\log N)$ and that it is a statistically secure implementation.
 
 \section{Lessons Learnt}
 
