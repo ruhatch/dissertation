@@ -7,6 +7,7 @@
 \crefname{figure}{Figure}{Figures}
 \crefname{listing}{Listing}{Listings}
 \crefname{section}{Section}{Sections}
+\crefname{table}{Table}{Tables}
 
 
 \usepackage[margin=25mm]{geometry}  % adjusts page layout
@@ -313,36 +314,33 @@ MirageOS is a unikernel operating system. In other words, a MirageOS application
 
 \section{System Architecture}
 
+This project uses the framework illustrated in \cref{fig:cloudInstance}. The focus is on implementing the code for the cloud instance, which consists of the implementation of Path ORAM, a file system running on top of it, and a search module that presents an API to the user. Writing interfaces for specific cloud storage providers is left as future work, so for the purposes of this project a local block device is used for storage.
+
+MirageOS provides an interface for a block device, \texttt{BLOCK}. The ORAM module is designed to satisy this interface, so that it can be inserted into exisiting Mirage applications. It is also designed to run on any underlying storage that satisfies \texttt{BLOCK} and, thus, interfaces for cloud storage providers could be written to be compatible with ORAM. The encryption module is designed in the same way, so it can be inserted between ORAM and the underlying storage. \Cref{fig:miragestack} shows the overall structure of the application.
+
 \setlength{\unitlength}{0.75mm}
 \input{mirageStackBody}
 \setlength{\unitlength}{0.5mm}
-
-We have discussed a couple of the major building blocks of the implementation, but how does it all fit together? We start with the architecture that we already have, a client and a server, communicating using the server's cloud storage API. Now what we want to do is insert our trusted ORAM instance in between the client and the server. In order to do this with the least inconvenience to the user, we need to define an API that unifies those of the cloud providers, providing all of the same facilities that the user already has access to. Then we need to have ORAM actually interface with the cloud providers. We can do this by creating a module for each provider that translates their individual API to satisfy MirageOS's BLOCK interface. Actually writing these modules will not be part of this project.
-
-Now all of the important stuff can happen in between the two interfaces. \Cref{fig:miragestack} shows the overall structure of the ORAM instance. From the bottom up, we have the underlying BLOCK module, which will be the bindings for some cloud provider, or a local block device for the purposes of evaluating this project. Then there is an encryption layer, that will take care of all cryptographic operations in one module, exposing another BLOCK interface. On top of this we have the ORAM layer, which will implement \cref{alg:access}, along with marshalling data into and out of the BLOCK interface on both sides of the operation. We can build a file system at the top layer that takes any BLOCK implementation, which will allow us to perform tests of the overhead introduced by different combinations of modules. Then we will add our search module along side the file system, which will construct and store the inverted index that we described in \cref{sec:invertedindexintro}, as well as exposing search operations to the client. Combining all of these modules will give a complete system, capable of performing secure search over encrypted documents.
 
 \section{Requirements Analysis}
 
 \begin{description}
 	\item [High Priority] Basic ORAM
-	\item [Medium Priority] File System
-	\item [Medium Priority] Search Module
-	\item [Low Priority] Encryption
-	\item [Low Priority] Statelessness (Extension)
-	\item [Low Priority] Recursion (Extension)
+	\item [Medium Priority] File system, Search module
+	\item [Low Priority] Encryption, Statelessness (Extension), Recursion (Extension)
 \end{description}
 
-ORAM is the core focus of the project and as such is given high priority. The addition of the file system and search module complete system that we can evaluate, so these two modules are of medium priority. Encryption and further optimisations will round off the project, but are not necessary in order to get something that we are able to evaluate, so are given low priority. Finally, integrity verification is left as an extension, and therefore has low priority.
+Building ORAM is the core focus of the project and as such is given high priority. The addition of the file system and search module creates a complete system that can be evaluated, so these two modules are of medium priority. Encryption is necessary in a real world system, but not to perform evaluation, so it is given low priority. Recursion and stateless are extensions, and are therefore deemed to have low priority.
 
 \section{Choice of Tools}
 
 \subsection{OCaml}
 
-Having decided to build ORAM on top of MirageOS, OCaml was really the only choice of programming language, because Mirage applications and libraries are all built in OCaml. However, OCaml was also part of the reason for choosing to build on Mirage.
+OCaml is the logical choice of programming language when building for MirageOS, because Mirage applications and libraries all use OCaml. However, OCaml's module and type systems were also considerations in the choice of Mirage for this project.
 
-OCaml has an extremely powerful module system, making it easy to parameterise the ORAM implementation over module signatures for Block devices or other system components. This not only encourages more generalised programming, but also allows powerful techniques like recursive modules to be exploited. For instance, to implement recursive ORAM, the position map of the main ORAM is another ORAM, so we can simply parameterise over a position map signature and pass the ORAM implementation to itself as the position map.
+OCaml has a powerful module system. It allows one to build \emph{functors}, which are modules parameterised over module interfaces. Any module that satisfies the interface can be given to the functor to create a new concrete module. ORAM can therefore be implemented as a functor that is parameterised over the \texttt{BLOCK} interface.
 
-OCaml's static typing system is also indispensable for ensuring correctness of programs and increasing productivity.
+OCaml's static typing system is an indispensable tool for ensuring the correctness of programs and for increasing productivity.
 
 \subsection{Libraries}
 \label{subsec:libraries}
@@ -376,7 +374,8 @@ Stemmer & 0.2 & Linguistic Processing & GNUv2 \\
 
 \subsection{Development Environment}
 
-Good tooling is essential to productivity when building large projects. For OCaml, one of the most important tools is OASIS, which automatically generates Makefiles for a project, based on a specification file. Using the OCaml compilers directly quickly gets infeasible, but OASIS takes care of everything for you. Emacs also proved to be an incredibly useful tool, because there are a number of OCaml specific plugins that provide everything from code indenting and syntax highlighting, to autocompletion and type inspection. It is also possible to run a shell from within Emacs itself, where it is possible to interpret, compile, and run the code, which gives a big boost to productivity.
+Choosing the right tools is essential to the productivity of large projects. For OCaml, one of the most important tools is OASIS, which automatically generates Makefiles for a project, based on a specification file. Direct use of the OCaml compiler quickly becomes infeasible when linking together a large number of modules. OASIS deals with this automatically.
+Emacs proved incredibly useful, because code indentation, syntax highlighting, autocompletion, and type inspection are all provided by third-party plugins. Code can be interpreted, compiled, and run from a shell within Emacs, which boosts productivity.
 
 \begin{table}[t]
     \centering
@@ -401,29 +400,35 @@ Good tooling is essential to productivity when building large projects. For OCam
 
 \section{Software Engineering Techniques}
 
-% Talk about writing interface files before writing code in order to fit code to requirements and designing before implementing
+I employed two key techniques to ensure my code was well-designed and well-built, without compromising productivity.
 
-% Talk about the ability to do Test Driven Development and the power of unit tests
+Firstly, I wrote the interface file for each module before writing the implementation. This forced me to make important design decisions up front, clarifying the structure of the module and its relation to the system as a whole.
 
-I employed two major techniques to ensure my code was well thought through and well built, while remaining productive.
+Secondly, I practised Test Driven Development \cite{hunt2004pragmatic}. I unit tested each new piece of code as it was written, allowing me to fail fast and fix problems at their source. This approach meant that small modules could be integrated into a larger system that worked as expected more often than not.
 
-First of all a Test Driven Development approach allowed me to fail fast \cite{hunt2004pragmatic}. I wrote unit tests for each new piece of code that was written, until I was sure that it was working correctly. This meant that when it came to combining small modules into a larger system, things worked together as expected more often than not.
-
-Secondly, I wrote interface files before writing the actual implementation. This meant that I had to think about the design of each module thoroughly before writing any code and also meant that I could make adjustments to other modules in order to fit with the new design.
-
-Combining these techniques with documentation and structuring of both the source code and the source repository, led to a manageable and feasible development workflow.
+Combining these techniques with documentation and structuring of both the source code and the source repository led to a manageable and productive development workflow.
 
 \section{Summary}
 
-In this chapter I have discussed the work that was undertaken before development began. This included a rigorous definition of the threat model, a brief introduction to the major algorithms, data structures and libraries, an overview of preliminary architectural designs, and a discussion of the techniques and tools used in the development process.
+This chapter has covered the work undertaken prior to development. This included a definition of the threat model, a brief introduction to the major algorithms, data structures and libraries, an overview of the preliminary architectural design, and a discussion of the techniques and tools selected for the development process.
 
-The next chapter will show how all of this information was used to achieve the aims of the project.
+The next chapter demonstrates how this preparatory material was applied to successfully implement the Path ORAM protocol on MirageOS, and how this protocol was used to build a secure encrypted keyword search application.
 
 \chapter{Implementation}
 
-This chapter describes the process that took the designs and algorithms of the previous chapter and turned them into a functioning system. An overview of the implemented system is given in \cref{fig:systemOverview}. The structure of the text will follow the structure of this diagram, working up from the bottom. We thus start with a discussion of encryption in \cref{sec:encryption}, then we have a longer discussion of ORAM in \cref{sec:pathORAM}, because this is the main focus of the project. Following that we discuss the file system and the search module in \cref{sec:fileSystem,sec:searchmodule} respectively.
+This chapter explains the process of building a functioning system, using the designs and algorithms of the previous chapter. An overview of the system is given in \cref{fig:systemOverview}. Each module will be examined in turn, working upwards through the diagram. Thus, the chapter begins with a discussion of encryption in \cref{sec:encryption}, followed by a longer discussion of ORAM in \cref{sec:pathORAM}, which constitutes the main focus of the project. This includes subsections about the extensions: recursion and statelessness. Finally, the file system and search modules are explored in \cref{sec:fileSystem,sec:searchmodule} respectively.
 
-Looking at \cref{fig:systemOverview}, we can summarise the major challenges of the implementation. At the highest level, the plumbing together of all the parts of the system required careful API design and some intricate usage of the powerful OCaml module system. Choosing a library to use for the encyption module was an important decision and I actually ended up filing a pull request to fix an important bug. The ORAM module presented many challenges, not least of which was simply understanding the Path ORAM protocol and translating its terse pseudocode into a fully functioning program. Adding recursion to this implementation required an even deeper understanding of the module system, including first class modules. The implementation of a minimal, but complete, inode-based file system, required appreciation of the choices made by many file system designer before me, and the realisation of a B-Tree library in OCaml, which did not exist before. Finally the search module leveraged many concepts from the field of information retrieval, including algorithms and data structures, but also an appreciation of the trade-offs that must be made between the space used and the precision of the indexing process.
+The main challenges and achievements of the implementation can be summarised with reference to \cref{fig:systemOverview}.
+
+At the inter-modular level, integration of all parts of the system required careful API design and intricate manipulation of the OCaml module system.
+
+For encryption, an appropriate library had to be chosen, a process that involved filing a pull request to fix a critical bug.
+
+The ORAM module presented the challenge of translating the terse pseudocode of the Path ORAM protocol into a functioning program. This included designing a position map capable of operating on machines of any word size, and building functions to marshall data to and from the format required by ORAM. Adding recursion to this implementation warranted a deeper understanding of the module system, including first class and recursive modules. To achieve statelessness I had to serialise recursive data structures, which meant writing custom functions to conform with a binary protocol.
+
+The implementation of a minimal, but complete, inode-based file system required investigation into the choices made by many file system designers before me. I weighed these against the demands of my system and included only the necessary elements. Furthermore, my file system entailed an implementation of B-Trees, which did not previously exist in OCaml. I therefore implemented a B-Tree library myself that can be applied to other Mirage applications, representing a contribution to the community.
+
+Finally, the search module made use of concepts from the field of Information Retrieval, including algorithms and data structures. The decision to include stemmming represented a significant trade-off between the space used by the indexing process and its precision.
 
 \begin{figure}
     \centering
