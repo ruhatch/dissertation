@@ -19,8 +19,13 @@
 \usepackage{tabularx}
 \usepackage[numbers]{natbib}
 \usepackage{tikz}
+\usepackage{caption}
 \usepackage{subcaption}
-\usetikzlibrary{trees,calc,chains,matrix,positioning,scopes,arrows}
+\captionsetup[figure]{labelfont={bf},textfont=it}
+\usetikzlibrary{trees,calc,matrix,arrows,decorations.pathreplacing}
+\usepackage{gnuplot-lua-tikz}
+
+\tikzset{>=stealth'}
 
 %%%%%%% Using Minted Package for Code Listings %%%%%%%
 \usepackage{minted}
@@ -125,95 +130,83 @@ extent for a comparable purpose.
 
 \chapter{Introduction}
 
-% Give an overview of the problem - similar to the beginning of the project proposal
-
-% Talk about increasing use of cloud computing
-
-% Talk about loss of ability to search efficiently over documents
-
-% Define threat model clearly
-
-% Talk about solutions based on symmetric encryption
-
-% Explain why these fail and what the consequences are
-
-% Discuss ORAM as a solution to this problem
-
-% Describe other work in the area of ORAM etc.
-
 \section{Motivation}
 
-Cloud computing is becoming ubiquitous, with more than an exabyte of data delivered by Cloud Storage Providers (CSPs) in 2013 \cite{nasuni2013cloud}. For large businesses, a private cloud can be a cost effective way to keep data isolated, but as public cloud services become ever cheaper, even these businesses could be forced to succumb to market pressures and move to the public cloud. With so much important data held by only a few major cloud providers, trust becomes a major issue.
+With cloud storage fast becoming ubiquitous, providers are faced with the challenge of guaranteeing the security of their clients' data. 
+More than an exabyte of data was delivered by cloud storage providers in 2013 \cite{nasuni2013cloud}, and since so much of this data is held by only a handful of providers, trust is becoming a major concern.
 
-Encryption appears to be the solution to our trust issues; if the providers cannot read the plain-text of our data then surely it is secure? This appears to hold in general, but in the important application of query-based searching, we have a problem: using current methods of homomorphic encryption to perform search over encrypted documents can leak up to 80\% of queries \cite{islam2012access}. Knowledge about the queries made to a data set, along with the amount of documents returned by each query, could lead to some dangerous inferences. As a motivating example, discovering that a query such as $\langle name,~disease\rangle$ made to a medical database returned results would allow an adversary to uncover information about a patients medical status, breaching patient confidentiality.
+Encryption might appear to be the solution to these trust issues; surely if the providers cannot read the plain-text of data then it must be secure. This seems to hold in general, but, in the application of query-based search, there is a problem. \citet{islam2012access} demonstrated that using current methods of homomorphic encryption to search over encrypted documents can leak up to 80\% of queries. Knowledge of the queries made to a data set, along with the number of documents returned by each query, could lead to dangerous inferences. As a motivating example, the discovery that a query to a medical database, such as $\langle name,~disease\rangle$, returned results might allow an adversary to deduce information about a patient's medical status, constituting a breach of patient confidentiality.
 
-What allowed \citet{islam2012access} to infer search queries was knowledge about the documents returned by any specific query. Thus, in order to protect against this kind of attack we need to have some way of preventing the server from knowing which documents it is actually returning in response to any query. Oblivious Random-Access Memory (ORAM) gives us exactly what we want. When using ORAM, not only are two accesses made to exactly the same piece of data computationally indistinguishable to the server, but so too are any two access patterns of the same length.
+\citet{islam2012access} were able to infer search queries using the access pattern, the set of documents returned by each query. Thus, in order to protect against this kind of attack, we need to prevent the server from knowing which documents it returns in response to a query. Oblivious Random-Access Memory (ORAM) provides exactly that. Using ORAM, two accesses to the same piece of data, and, moreover, any two access patterns of the same length, are computationally indistinguishable to the server.
 
-This project aims to demonstrate that, using a particular ORAM protocol, \citeauthor{stefanov2013path}'s Path ORAM \cite{stefanov2013path}, it is possible to build a system that allows us to search over a set of encrypted documents without leaking the resulting access pattern, protecting the content of the search queries and therefore the confidentiality of the documents.
+This project aims to demonstrate that, using \citeauthor{stefanov2013path}'s Path ORAM protocol \cite{stefanov2013path}, it is possible to build a system that searches over encrypted documents without leaking the resulting access pattern, protecting the content of the search queries and, therefore, the confidentiality of the documents.
 
 \section{Challenges}
 
-The first major challenge that faces any security related project is adequately defining the threat model. In order to be able to reason about and evaluate the security properties of the system, we need to know exactly what we assume an adversary to be capable of. Once we have done this we must show that within these capabilities, the security properties that we desire the system to have remain intact. The threat model will be defined in \cref{sec:threatmodel}.
+When dealing with security, the first challenge is to precisely define the threat model. The assumed capabilities of all parties must be clearly stated to ensure that security proofs are built on a solid foundation. The threat model for this project was refined a number of times, following the discovery of hidden assumptions, and is defined in \cref{sec:threatmodel}.
 
-By virtue of being stored in the cloud, we should be able to access our data at any time, from any place, while still maintaining the desired security properties. We also want to be tolerant of network connection errors and client-side crashes. Thus, another challenge is to make the system completely stateless.
+Another challenge is taking a complex, abstract protocol, and making the design decisions required to turn it into a working system. The Path ORAM protocol abstracts away many implementation details, which had to be realised in this project.
 
-In order to make statelessness more efficient, it is necessary to augment ORAM with recursion (\cref{sec:oramintro}), which reduces the amount of transient client-side storage. This enables us to efficiently store the client's state between accesses. Recursion introduces the challenge of choosing how many levels to use. Each extra level of recursion reduces the size of the client's state, but also incurs a time and space overhead. This is explored briefly in \citet{stefanov2013path}, but we will attempt to have the system automatically choose parameters for the recursion based on the size and block size of the underlying storage used by the system.
+Adding recursion to ORAM reduces the amount of client-side storage, making stateless ORAM more efficient. This presents us with the challenge of building recursive data structures, which are difficult to reason about and debug. This project takes advantage of OCaml's powerful module system, which separates the challenge of recursion from the underlying implementation.
 
-Finally in order for the system to perform query-based search over encrypted documents we need to implement a file system, an information retrieval module and an encryption module. These modules will be rudimentary, as the main focus of the project is the implementation and optimisation of the ORAM module, but all of them have inherent design and implementation challenges that will be need to be addressed.
+The final challenge is choosing how to evaluate ORAM. There are many parameters and metrics that we could examine, however, due to the time consuming nature of running experiments on ORAM, this project limits its focus to the time overheads incurred by ORAM and the security of its construction.
 
 \section{Related Work}
 
-ORAM was first introduced by \citet{goldreich1996software}, motivated by the needed for software protection on disks. The model was then expanded and refined for other settings such as secure processors and cloud computing over a number of years \cite{shi2011oblivious}. \citet{stefanov2013path} had a large impact on the field, mainly due to the simplicity and elegance of the protocol. Since then, lots of work has been done to optimise ORAM constructions \cite{yu2014enhancing,ren2015constants}, add additional features \cite{moataz2015resizable}, and build actual systems based on them \cite{stefanov2013oblivistore}. An extremely useful thesis by \citet{teeuwen2015evolution}, summarised the entire ORAM field, providing insight into the evolution and therefore future of ORAM.
+ORAM was first introduced by \citet{goldreich1996software} in \citeyear{goldreich1996software}, who were motivated by the need for software protection on disks. The model was then expanded and refined for other settings, such as secure processors and cloud computing \cite{shi2011oblivious}. \citet{stefanov2013path} made a significant contribution to the field, due to the simplicity and elegance of their protocol. Since then, many optimisations and additional features have been developed \cite{yu2014enhancing,ren2015constants,moataz2015resizable}, and used to build a working, cloud-based storage system \cite{stefanov2013oblivistore}. A useful thesis by \citet{teeuwen2015evolution} summarises the entire ORAM field, providing valuable insight into the evolution of ORAM.
 
 \chapter{Preparation}
 
-% Describe all work undertaken before the coding - show professional approach to project
-
-% Talk about refining and clarifying model
-
-% Talk about reviewing research papers to find best way of bringing things together
-
-% Talk about choosing OCaml 	for its static typing and powerful module system
-
-% Talk about how this led to designing the system in a modular way (include figure for system)
-
-% Talk about MirageOS and building on top of it
-
-\section{Defining the Threat Models}
+\section{Threat Model}
 \label{sec:threatmodel}
 
-Our threat models are defined in terms of a client, a server and an attacker. We have a basic model with passive attackers and an extended model with active attackers.
+This threat model involves three principals: the client, the server, and the attacker. The network is assumed to be under the control of the attacker. The attacker and the server are defined to be passive, and honest, but curious; they will both gather as much information as possible, without deviating from the protocol. Thus, the attacker will eavesdrop, but will neither prevent transmissions between the client and the server, nor tamper with, or produce their own, messages. The server will not tamper with the underlying storage. In this model, the attacker can be dealt with by the use of encryption, so it is the server that presents a threat, because it can see the access pattern of the underlying storage. The goal of this project is to ensure that this access pattern does not leak information from the search queries nor from the documents in the underlying storage.
 
-\setlength{\unitlength}{0.67mm}
-\input{threatModel}
-\setlength{\unitlength}{0.5mm}
+%\setlength{\unitlength}{0.67mm}
+%\input{threatModel}
+%\setlength{\unitlength}{0.5mm}
 
-We assume that the network is under the attacker's control. In the basic model we define the server and the attacker to be passive, and honest, but curious. This means that they will both gather as much information as possible, without deviating from the protocol. Thus the attacker will eavesdrop, but will not prevent messages from arriving at the server, tamper with them in any way or produce their own fake messages. The server will also not tamper with the messages, or with the underlying storage that the protocol is accessing. In this model the attacker is not as interesting as the server, because all communications are encrypted. Thus it is the server, that can see the access patterns of the underlying storage, that we are trying to protect against. The goal of the project is to make sure that this access pattern reveals nothing about the contents of the search queries or the documents in the underlying storage.
-
-We can also extend the model to one where both the attacker and the server become active, freely tampering with messages and introducing new messages, and the server tampers with the underlying storage. In this case we will need to extend our solution with integrity verification.
+\begin{figure}
+    \centering
+    \begin{tikzpicture}[>=stealth']
+        \matrix (m) [matrix of nodes,row sep=8mm,column sep=5mm,nodes={minimum width=35mm,minimum height=20mm,inner sep=0}] {
+          &
+          |[draw]| Attacker &
+          \\
+          |[draw]| Client &
+          |[minimum size=0]| &
+          |[draw]| Server \\
+        };
+        \draw[->] ($(m-2-2) + (0,1.5mm)$) -- (m-1-2);
+        \draw[<->] (m-2-1) -- (m-2-3);
+        \node at ($(m-1-2) - (0,34mm)$) {Read, Write, Search};
+    \end{tikzpicture}
+    \caption{The threat model: the attacker and server are passive, and honest, but curious.}
+    \label{fig:threatmodel}
+\end{figure}
 
 \section{Introduction to Path ORAM}
 \label{sec:oramintro}
 
-Path ORAM is defined in terms of a client and a server, where the client wishes to store data on the server. The data is split into blocks and each block is tagged with a sequence number or address, its position if the data were to be stored sequentially.
+The Path ORAM protocol is defined in terms of a client and a server, where the client stores data on the server. The data is divided into \emph{blocks}, each of which is tagged with its offset in the data. We call this the block's \emph{address}.
 
-On the server blocks are stored in a binary tree of height $L$, where each node in the tree is a bucket with size $Z$, containing up to $Z$ blocks. Thus, the tree stores $$N = Z \cdot (2^{L+1} - 1)$$ blocks in total.
+On the server, blocks are stored in a binary tree of height $L$. Each node in the tree is a \emph{bucket} of size $Z$, that may hold up to $Z$ real blocks. Buckets must always be full, so dummy blocks are stored when there are fewer than $Z$ real blocks. Thus, the tree stores $$N = Z \cdot (2^{L+1} - 1)$$ blocks in total.
 
-The client requires two local data structures. The stash is a sort of working memory; as blocks are read from the server they are put into the stash and are written back to the server later on. The position map associates with each address a number between $0$ and $2^L-1$, which corresponds to a leaf in the tree. The protocol maintains the invariant that, at anytime, a block with position $x$ in the position map is either in the stash, or in a bucket along the path from the root of the tree to the $x^{th}$ leaf.
+The client stores two local data structures: the \emph{stash} and the \emph{position map}. The stash is a sort of working memory. As blocks are read from the server, they are written into the stash and may be returned to the server later on. Initially the stash is empty. The \emph{position map} associates each address with a position between $0$ and $2^L-1$, which corresponds to a leaf, and therefore a path, in the tree. The position map is initialised by assigning a random position to each address.
 
-This is achieved using \cref{alg:access}, which is split into four main steps:
+The protocol maintains the invariant that, after the client performs a read or a write, a block with position $x$ is either in the stash, or in some bucket along the path to leaf $x$. This is achieved by using \cref{alg:access} for both read and write operations. Its execution can be divided into four steps:
 
-\begin{description}
-	\item[Remap Block] The current position $x$ of block $\mathsf{a}$ is read and then a new position is chosen uniformly at random
-	\item[Read Path] The path to the leaf $x$ is read into the stash. At this point the block for address $\mathsf{a}$ is definitely in the stash, if it has ever been written into the ORAM
-	\item[Write New Data] If the operation is a $\mathsf{write}$, then the value in the stash is replaced by the new $\mathsf{data^*}$
-	\item[Write Path] The path to the leaf $x$ is filled with blocks from the stash. A block with address $\mathsf{a'}$ can be put in the bucket at level $l$, if the path to $\mathsf{position[a']}$ intercepts the path to $x$ at level $l$. If there are not enough blocks satisfying this criterion, i.e. $min(|S'|,Z) < Z$, then the bucket is filled with dummy blocks
-\end{description}
+\begin{enumerate}
+	\item \textbf{Remap block}. The current position $x$ of the block with address $\mathsf{a}$ is read from the position map. A new position is chosen uniformly at random from $\{0,\dots,2^L-1\}$ and is added to the position map.
+	\item \textbf{Read path}. The path to leaf $x$ is read into the stash. The block with address $\mathsf{a}$ will now be in the stash, if it has ever been written into ORAM.
+	\item \textbf{Write new data}. If the operation is a $\mathsf{write}$, the current block with address $\mathsf{a}$ is removed from the stash and is replaced by the new block containing $\mathsf{data^\ast}$.
+	\item \textbf{Write path}. The path to leaf $x$ is filled with blocks from the stash that meet the following condition. A block with address $\mathsf{a'}$ can be written into the bucket at level $l$ if the path to leaf $\mathsf{position[a']}$ follows the path to leaf $x$ down to level $l$. If the number of blocks that satisfy this criterion is less than the bucket size, then the remainder of the bucket is filled with dummy blocks.
+\end{enumerate}
 
-Either it was possible to write a block into the stash along the path to its leaf, or not, in which case it is in the stash, so the invariant holds after each execution of the algorithm.
+If a block in the stash is written back into the tree, then it must be in some bucket along the path to its assigned position. If not, then it is still in the stash, so the invariant holds after each execution of the algorithm.
 
 \begin{algorithm}[h]
-\caption{Read/write data block at address $\mathsf{a}$}
+\caption{Read/write data block with address $\mathsf{a}$}
 \label{alg:access}
 \footnotesize
 \begin{algorithmic}[1]
@@ -246,28 +239,77 @@ Either it was possible to write a block into the stash along the path to its lea
 \end{algorithmic}
 \end{algorithm}
 
-The security of this operation comes from the fact that positions are assigned uniformly at random. If we consider the sequence of $M$ accesses, $$\mathbf{p} = (\mathsf{position}_M[\mathsf{a}_M], \mathsf{position}_{M-1}[\mathsf{a}_{M-1}], \dots, \mathsf{position}_1[\mathsf{a}_1]),$$ any two accesses to the same address will be statistically independent and trivially so will two accesses to different addresses. Thus, by an application of Bayes' rule, we have $$\Pr(\mathbf{p}) = \prod\limits^{M}_{j=1}\Pr(\mathsf{position}_j[\mathsf{a}_j]) = \left(\frac{1}{2^L}\right)^M$$ i.e. the probability of the whole sequence is the probability of each of the individual probabilities, meaning the access pattern is indistinguishable from a random sequence of bit strings.
+The security of this algorithm is based on the random assignment of positions in step 1. If we consider the sequence of $M$ accesses, $$\mathbf{p} = (\mathsf{position}_M[\mathsf{a}_M], \mathsf{position}_{M-1}[\mathsf{a}_{M-1}], \dots, \mathsf{position}_1[\mathsf{a}_1]),$$ any two accesses to the same address will be statistically independent, as will two accesses to different addresses. Thus, by an application of Bayes' rule, we have $$\Pr(\mathbf{p}) = \prod\limits^{M}_{j=1}\Pr(\mathsf{position}_j[\mathsf{a}_j]) = \left(\frac{1}{2^L}\right)^M$$ i.e. the probability of the whole sequence is equal to the product of the individual probabilities, and therefore the access pattern is indistinguishable from a random sequence of bit strings.
 
-We might, and for our application will, want to make ORAM stateless, storing all information on the disk, and nothing (except private keys) on the client. We can do this na\"ively by simply dumping all of the state to disk after every operation, but in our current construction, the position map takes $O(N)$ storage space on the client, and the stash $O(\log N)$. Adding recursion to ORAM allows us to reduce the size of the overall client storage to $O(\log N)$, by reducing the space required for the position map to $O(1)$, while maintaining $O(\log N)$ for the stash (actually now multiple stashes). We can now write the client-side storage to the server after each call, and read it back again before the next one, without increasing the asymptotic bandwidth overheads.
+To enable the client to disconnect from ORAM and reconnect later on, perhaps from a different machine, there must be no persistent client-side state. We call this \emph{stateless} ORAM. This can be achieved by flushing the state, i.e. the stash and the position map, to disk after every operation. However, in the current model, the stash occupies $O(\log N)$ space, and the position map, $O(N)$, making this infeasible in practice.
 
-Recursion works by storing the position map of our original ORAM, now referred to as ORAM$_0$, in a new ORAM, ORAM$_1$. Now the client stores the position map of this ORAM, plus the stashes of both. If we can store $\chi$ positions in each block of ORAM$_1$, then the new position map is only $O(N/\chi)$. We can then repeat this process until we have the position map of ORAM$_n$ being of constant size. The number of levels required to achieve this are examined in \citet{stefanov2013path} and explored further in \cref{subsec:comparisonWithLiterature}.
+\emph{Recursive} ORAM reduces the space required by the position map to $O(1)$, taking the overall client-side state to $O(\log N)$. This means that statelessness no longer increases the asymptotic bandwidth overhead. Recursion stores the position map of the original ORAM, now referred to as ORAM$_0$, in another ORAM, ORAM$_1$. Thus, the client-side state becomes the position map of ORAM$_1$, along with the stashes of both ORAM$_0$ and ORAM$_1$. If each block in ORAM$_1$ can store $\chi$ positions then it will need $N' = N/\chi$ blocks. Therefore, the position map of ORAM$_1$ occupies $O(N/\chi)$ space. Repeating this recursion $\log N / \log \chi$ times leads to a position map of size $O(1)$. This sacrifices the space occupied by the recursive ORAMs and the time needed to perform recursive accesses, for efficient statelessness.
 
 \section{Introduction to Inverted Indexes}
 \label{sec:invertedindexintro}
 
-The inverted index is the single most important data structure in Information Retrieval. It allows us to perform a large amount of work in advance in order to give performance that is linear in the number of documents involved in a query, much better than a linear scan of all documents that is $O(NK)$, for $N$ documents with an average of $K$ words. It consists of two parts: the dictionary and the postings. The dictionary is a list, usually stored as a hash table, of all of the terms that appear in a set of documents. Then for each term, we have a postings list, a list of all the documents that contain a term. Collectively these postings lists are referred to as the postings.
+The \emph{inverted index} is the most important data structure in Information Retrieval. The amount of time required to perform a query is reduced by performing a large amount of work in advance. A simple linear scan of $N$ documents takes $O(N)$ time. Using an inverted index also takes $O(N)$ time in the worst case, but the constant is greatly reduced and empirically the index delivers excellent performance.
 
-To look up a single keyword in a hash-based inverted index we hash the keyword and return the relevant postings list, if it exists. We can add simple Boolean operations such as disjunction, which takes the union of two postings lists, and conjunction, which takes the intersection.
+The index consists of two parts: the \emph{dictionary} and the \emph{postings}. The dictionary is a list, usually stored as a hash table, of all of the terms that appear in a set of documents. Each term has a postings list, a list of all the documents that contain that term. Collectively these postings lists are referred to as the postings.
 
-In this project we will restrict ourselves to conjunctive queries, where a query is a space-separated list of keywords, and we take the conjunction of the postings lists for all of these keywords. We do this because we are focusing on the correctness and efficiency of search using the ORAM implementation, rather than creating an advanced IR system.
+An inverted index can be constructed in three steps:
+\begin{enumerate}
+    \item Split each document into \emph{tokens}. These are units of the document separated by spaces.
+    \item Perform linguistic preprocessing on the tokens. An example is \emph{stemming}, which removes suffixes of words, converting them into a normalised form.
+    \item Assuming each document has an ID, add the ID to the postings list of each token the document contains.
+\end{enumerate}
 
-Constructing an inverted index can be done in three simple steps. We first split the text into tokens, units of the document that are separated by spaces. We then perform some linguistic preprocessing on these tokens, for example stemming, which removes suffixes of words in order to get them into a normalised form. Finally, assuming that we have assigned each document an ID, we add the document ID to the postings list of each token.
+Look-up of a single keyword in a hash-based inverted index is performed by hashing the keyword and returning the relevant postings list, if it exists. Simple Boolean operations can be added. For instance, disjunction takes the union of two postings lists, and conjunction takes the intersection.
+
+This project will limit its focus to conjunctive queries, as it aims to demonstrate the correctness and efficiency of search using the ORAM implementation, rather than creating an advanced IR system. Queries are space-separated lists of keywords, and the result of a query is the conjunction of the postings lists of all keywords it contains.
+
+\begin{figure}
+    \centering
+    \begin{tikzpicture}
+        \matrix (m) [matrix of nodes,nodes={draw},column sep=8mm,row sep=4mm] {
+          Term1 & Doc1 & Doc2 & Doc3 & |[draw=none]| $\cdots$\phantom{T} \\
+          Term2 & Doc3 & Doc6 & Doc7 & |[draw=none]| $\cdots$\phantom{T} \\
+          Term3 & Doc4 & Doc8 & Doc9 & |[draw=none]| $\cdots$\phantom{T} \\
+        };
+        \draw[->] (m-1-1) -- (m-1-2);
+        \draw[->] (m-1-2) -- (m-1-3);
+        \draw[->] (m-1-3) -- (m-1-4);
+        \draw[->] (m-1-4) -- (m-1-5);
+        \draw[->] (m-2-1) -- (m-2-2);
+        \draw[->] (m-2-2) -- (m-2-3);
+        \draw[->] (m-2-3) -- (m-2-4);
+        \draw[->] (m-2-4) -- (m-2-5);
+        \draw[->] (m-3-1) -- (m-3-2);
+        \draw[->] (m-3-2) -- (m-3-3);
+        \draw[->] (m-3-3) -- (m-3-4);
+        \draw[->] (m-3-4) -- (m-3-5);
+        \draw[decorate,decoration={brace,mirror,raise=4pt}] (m-3-1.south west) -- node[midway,below,yshift=-7pt] {\footnotesize Dictionary} (m-3-1.south east);
+        \draw[decorate,decoration={brace,mirror,raise=4pt}] (m-3-2.south west) -- node[midway,below,yshift=-7pt] {\footnotesize Postings} ($(m-3-5.south east) - (1em,0)$);
+    \end{tikzpicture}
+    \caption{The structure of an inverted index: the dictionary contains terms and the postings contains lists of documents that each term appears in.}
+    \label{fig:invertedIndex}
+\end{figure}
 
 \section{Introduction to MirageOS}
 
-MirageOS is a unikernel operating system. The idea of unikernels is to provide the minimum amount of functionality required of an application by pulling together a number of libraries, and compiling down to an executable. Compared to the traditional approach of running a full operating system such as Ubuntu, with databases, web servers, and the like built on top, the unikernel provides significant speed and memory improvements.
+Running ORAM in the cloud allows a user to access their data from any location. The ORAM client is a trusted cloud instance, and the server is a cloud storage provider, as illustrated in \cref{fig:cloudInstance}.
 
-Building the implementation of ORAM on Mirage allows us to have a consistent interface between client machines and cloud providers. We can run the ORAM software on a trusted cloud instance and connect through it from any client machine, to any cloud provider that we like. We also do not need to have the instance running at all times. Mirage is so lightweight, that we could spin up an instance every time we need to perform some actions. This saves us money because, using cloud services like AWS, we only pay for the compute time we actually use. This is the main motivation behind implementing statelessness in the project.
+\begin{figure}
+    \centering
+    \tikzstyle{principal}=[draw,node distance=50mm,minimum width=30mm,minimum height=25mm,text width=20mm,text centered]
+    \begin{tikzpicture}
+        \node[principal] (user) {User};
+        \node[principal,right of=user] (ci) {Cloud Instance};
+        \node[principal,right of=ci] (csp) {Cloud Storage Provider};
+        \draw[<->] (user) -- (ci);
+        \draw[<->] (ci) -- (csp);
+        \draw[decorate,decoration={brace,mirror,raise=4pt}] (ci.south west) -- (csp.south east) node[midway,below,yshift=-4mm] {Path ORAM Protocol};
+    \end{tikzpicture}
+    \caption{ORAM can be built as a MirageOS application, which can run on a trusted cloud instance.}
+    \label{fig:cloudInstance}
+\end{figure}
+
+MirageOS is a unikernel operating system. In other words, a MirageOS application is compiled to an executable, along with only the necessary parts of the OS. It can be compiled for a number of targets, including Unix or Xen. An executable, running directly on the Xen hypervisor in the cloud, is more lightweight than the traditional cloud stack, which runs an application on a full operating system, such as Ubuntu. By building ORAM as a MirageOS application, this project allows an instance running ORAM to be spun up whenever the user needs, and shut down when not in use, minimising its cost.
 
 \section{System Architecture}
 
@@ -281,18 +323,16 @@ Now all of the important stuff can happen in between the two interfaces. \Cref{f
 
 \section{Requirements Analysis}
 
-% Do requirements analysis in order to show that I thought about all of these things
-
 \begin{description}
-	\item [High Priority] Basic ORAM implementation
+	\item [High Priority] Basic ORAM
 	\item [Medium Priority] File System
 	\item [Medium Priority] Search Module
 	\item [Low Priority] Encryption
-	\item [Low Priority] Further Optimisations including Recursion and Statelessness
-	\item [Low Priority] Integrity Verification (Extension)
+	\item [Low Priority] Statelessness (Extension)
+	\item [Low Priority] Recursion (Extension)
 \end{description}
 
-ORAM forms the basis for the whole project and as such is given high priority. Once the basic ORAM is completed, adding a file system and search module gives us a complete system that we can evaluate, so these two modules are of medium priority. Encryption and further optimisations will round off the project, but are not necessary in order to get something that we are able to evaluate, so are given low priority. Finally, integrity verification is left as an extension, and therefore has low priority.
+ORAM is the core focus of the project and as such is given high priority. The addition of the file system and search module complete system that we can evaluate, so these two modules are of medium priority. Encryption and further optimisations will round off the project, but are not necessary in order to get something that we are able to evaluate, so are given low priority. Finally, integrity verification is left as an extension, and therefore has low priority.
 
 \section{Choice of Tools}
 
@@ -338,26 +378,26 @@ Stemmer & 0.2 & Linguistic Processing & GNUv2 \\
 
 Good tooling is essential to productivity when building large projects. For OCaml, one of the most important tools is OASIS, which automatically generates Makefiles for a project, based on a specification file. Using the OCaml compilers directly quickly gets infeasible, but OASIS takes care of everything for you. Emacs also proved to be an incredibly useful tool, because there are a number of OCaml specific plugins that provide everything from code indenting and syntax highlighting, to autocompletion and type inspection. It is also possible to run a shell from within Emacs itself, where it is possible to interpret, compile, and run the code, which gives a big boost to productivity.
 
-\begin{table}[h]
-\centering
-\begin{tabular}{|l|l|l|l|}
-\hline
-\textit{Tool} & \textit{Version} & \textit{Purpose} & \textit{License} \\
-\hline \hline
-Mac OSX & 10.11.2 & Operating System & Proprietary \\
-\hline
-Emacs & 24.5 & Text Editor & GPL \\
-\hline
-OPAM & 1.2.2 & Package Manager & GPLv3 \\
-\hline
-OASIS & 0.4.5 & Build Tool & LGPL-2.1 \\
-\hline
-\end{tabular}
-\caption{Tools used in the development of Mirage ORAM}
-\label{tab:devtools}
+\begin{table}[t]
+    \centering
+    \begin{tabular}{|l|l|l|l|}
+      \hline
+      \textit{Tool} & \textit{Version} & \textit{Purpose} & \textit{License} \\
+      \hline \hline
+      Mac OSX & 10.11.2 & Operating System & Proprietary \\
+      \hline
+      Emacs & 24.5 & Text Editor & GPL \\
+      \hline
+      git & 2.8.0 & Version Control & GPLv2 \\ 
+      \hline
+      OPAM & 1.2.2 & Package Manager & GPLv3 \\
+      \hline
+      OASIS & 0.4.5 & Build Tool & LGPL-2.1 \\
+      \hline
+    \end{tabular}
+    \caption{Tools used in the development of Mirage ORAM}
+    \label{tab:devtools}
 \end{table}
-
-% Do a table of tools used including OPAM, OASIS, git, Make, Atom, etc.
 
 \section{Software Engineering Techniques}
 
@@ -384,10 +424,6 @@ The next chapter will show how all of this information was used to achieve the a
 This chapter describes the process that took the designs and algorithms of the previous chapter and turned them into a functioning system. An overview of the implemented system is given in \cref{fig:systemOverview}. The structure of the text will follow the structure of this diagram, working up from the bottom. We thus start with a discussion of encryption in \cref{sec:encryption}, then we have a longer discussion of ORAM in \cref{sec:pathORAM}, because this is the main focus of the project. Following that we discuss the file system and the search module in \cref{sec:fileSystem,sec:searchmodule} respectively.
 
 Looking at \cref{fig:systemOverview}, we can summarise the major challenges of the implementation. At the highest level, the plumbing together of all the parts of the system required careful API design and some intricate usage of the powerful OCaml module system. Choosing a library to use for the encyption module was an important decision and I actually ended up filing a pull request to fix an important bug. The ORAM module presented many challenges, not least of which was simply understanding the Path ORAM protocol and translating its terse pseudocode into a fully functioning program. Adding recursion to this implementation required an even deeper understanding of the module system, including first class modules. The implementation of a minimal, but complete, inode-based file system, required appreciation of the choices made by many file system designer before me, and the realisation of a B-Tree library in OCaml, which did not exist before. Finally the search module leveraged many concepts from the field of information retrieval, including algorithms and data structures, but also an appreciation of the trade-offs that must be made between the space used and the precision of the indexing process.
-
-%As it is the core of the project, the implementation of Path ORAM is discussed first (\cref{sec:pathORAM}), followed by the file system (\cref{sec:fileSystem}), the search module (\cref{sec:searchmodule}) and finally encryption (\cref{sec:encryption}).
-
-% Describe what was actually implemented
 
 \begin{figure}
     \centering
@@ -731,12 +767,6 @@ The naive implementation of this, and that suggested by \cref{alg:access}, loops
 
 We now have a functioning ORAM functor, that can be used to augment a block device in any Mirage program. In \cref{subsec:recursion,subsec:statelessness} we look at optimisations and extensions to this ORAM construction, before moving onto to the further aims of the project.
 
-%\begin{listing}[h]
-%	\caption{Implementation of \cref{alg:access}}
-%	\label{lst:access}
-%	\inputminted[firstline=183, lastline=207]{ocaml}{../src/oram.ml}
-%\end{listing}
-
 \subsection{Recursion}
 \label{subsec:recursion}
 
@@ -749,41 +779,41 @@ So, to create a recursive ORAM, we take in the size, $N$, and the block size, $B
 \subsection{Statelessness}
 \label{subsec:statelessness}
 
-In order to achieve statelessness for ORAM, we need to store a few different things. We need to store type information, the stash, and the position map. We will first talk about how to layout all of this information on disk, before moving on to talk about how we actually get it there.
+In order to achieve statelessness for ORAM, we need to store type information, the stash, and the position map. We will first talk about how to layout all of this information on disk, before moving on to talk about how we actually get it there.
 
-Once we have initialised ORAM and begun to use it, we do not want to move it around on disk, because we would have to copy the entire thing. We do however need to store the information necessary to discover ORAMs existence in a well-known location, in order to allow us to reconnect to it. This leads us to storing a superblock in the first sector of the block device. This block will contain a pointer to the location of the rest of the state, along with its length. This way, we can store ORAM starting at the second location on disk, and then append all of the state at the end of the ORAM section, meaning we will never have to move ORAM once we have initialised it.
+Once we have initialised ORAM and begun to use it, we do not want to move it around on disk, because we would have to copy the whole data structure. We do however need to store the information necessary to discover ORAMs existence in a well-known location, in order to allow us to reconnect to it. This leads us to storing a what is called a superblock in the first block of the underlying block device. This block will contain a pointer to the location of the rest of the state, along with its length. This way, we can store ORAM starting at the second location on disk, and then append all of the state at the end of the ORAM section, meaning we will never have to move ORAM once we have initialised it.
 
 Now we actually need to store the state, which means we need some method of serialising it, ready to be written to disk. We could implement this manually, but for the majority of the information we can take advantage of an existing serialisation library, Jane Street's Bin\_prot. This is a binary protocol, that allows you to annotate a type with \texttt{[@@ deriving bin\_io]} and will then generate functions to read and write instances of the type into buffers. We are able to use this for all of the type information for ORAM, as well as for the stash. This leads us to splitting the ORAM type into a core, that can use Bin\_prot, and an extended type, that includes the position map and the underlying block device. This structure is shown in \cref{lst:orammaketype}.
 
-The position map is more difficult to serialise, because under recursive ORAM, it might actually be another ORAM. We obviously don't want to write the entire of the position map ORAM onto the disk a second time, so we need a custom serialisation function for the position map that will store only meta-data for ORAM position maps, and will store the entire position map in the base case. We want to store all state right at the end of the block device, after all recursive instances, so this function actually collects the data from all the levels of recursion together into one buffer.
+The position map is more difficult to serialise, because under recursive ORAM, it might actually be another ORAM. We don't want to write the entire of the position map ORAM onto the disk a second time, so we need a custom serialisation function for the position map that will store only meta-data for ORAM position maps, and will store the entire position map in the base case. We want to store all state right at the end of the block device, after all recursive instances, so this function actually collects the data from all the levels of recursion together into one buffer.
 
-Now that we can write all of the major parts into the buffer, we simply collect everything together and dump it at the end of the block device. After this is done, we are able to disconnect from ORAM safely. Reconnecting to ORAM is now a case of checking for the presence of the superblock, reading in the location and length of the state, reading the actual state, and then calling the connect function on the position map. The connect function allows each recursive ORAM instance to have its own reference to the underlying block device, but does nothing in the case of the in memory position map.
+Now that we can write all of the major parts into the buffer, we collect everything together and flush it to the end of the block device. After this is done, we are able to disconnect from ORAM safely. Reconnecting to ORAM is now a case of checking for the presence of the superblock, reading in the location and length of the state, reading the actual state, and then calling the connect function on the position map. The connect function allows each recursive ORAM instance to have its own reference to the underlying block device and returns once it reaches the in memory position map.
 
 \section{File System}
 \label{sec:fileSystem}
 
-In order to perform search over documents, we need some way of actually storing those documents. This section describes the design and implementation of a basic file system that satisfies the requirements of the project.
+In order to search over documents, we first need some way of storing those documents. This section describes the design and implementation of a basic file system that satisfies the requirements of the project.
 
 \subsection{General Design}
 
 The most common way of building a file system on top of a block device is through the use of inodes. An inode contains meta-information about a file along with pointers to the actual data blocks. For the purposes of this project, an inode will simply be one sector of the block device, containing the length of the file, followed by the list of pointers. In a system with more complex needs the inode would contain more information, such as modification/access timestamps, file permissions, etc., but we simply want to be able to read and write documents.
 
-We need to be able to access the inode for a particular file quickly, so we should store its location in an index. We could perform lookup based on the actual filename, but the names have variable lengths, therefore, because we want to store the index, it is better to lookup based on the hash of the filename. \Cref{subsec:inodeindex} describes the implementation of the Inode Index.
+We need to be able to access the inode for a particular file quickly, so we should store its location in an index. We could perform lookup based on the actual filename, but the names have variable lengths, therefore, because we want to store the index, it is better to lookup based on the hash of the filename. In a real system we would need to deal with collisions in the hash function, but for a small number of files we can neglect this possibility. \Cref{subsec:inodeindex} describes the implementation of the Inode Index.
 
-We also need to allocate space on the block device for inode index blocks, for inode blocks and for data blocks. So we need a map that tells us which blocks on the device are free and allows us to update it as new blocks are needed. \Cref{subsec:freemap} describes the implementation of the Free Map.
+We also need to allocate space on the block device for inode index blocks, for inode blocks and for data blocks, so we need a free map. This is a map that tells us which blocks on the device are free and allows us to update it as new blocks are needed. \Cref{subsec:freemap} describes the implementation of the free map.
 
-We could now build a working file system, but we want it to be stateless. In order to do that, we need to store enough information to be able to reconstruct its in-memory representation. All we actually need to store is the root address of the Inode Index and the length of the Free Map. These two alone allow us to locate the data structures on disk when reconnecting to the block device. We store these two pieces of information at address 0 in what we call the Superblock.
+We also want our file system to be stateless, and in order to do that, we need to store the data structures, along with enough information to find them on disk. We only need to store the root address of the Inode Index and the length of the Free Map to locate the data structures on disk when reconnecting to the block device. We store these two pieces of information at address 0 in another superblock.
 
-\subsection{The Inode Index}
+\subsection{Inode Index}
 \label{subsec:inodeindex}
 
 We need a data structure that associates keys, in the form of file hashes, with values, in the form of pointers to inodes. We want to support operations of insertion, lookup and deletion efficiently, but we also want to store the data structure on disk. This leads us naturally to an implementation using B-Trees.\footnote{The algorithms for B-Tree operations were adapted from \citet{CLRS09}}
 
-B-Trees are a generalisation of self-balancing binary search trees, where each node can have more than one child. If a node has $n$ children, then it stores $n-1$ keys. It is guaranteed that $$ \forall k \in child_m, j \in child_{m+1} . k < key_m < j, $$ that is, a key is greater than all the keys to its left and less than all the keys to its right.
+B-Trees are a generalisation of self-balancing binary search trees, where each node can have more than one child. If a node has $n$ children, then it stores $n-1$ keys. It is guaranteed that $$ \forall m \leq n, k \in child_m, j \in child_{m+1} . k < key_m < j, $$ that is, a key is greater than all the keys to its left and less than all the keys to its right.
 
-B-Trees are an efficient on-disk data structure, because we can use the whole of a disk sector for one node. This gives us an extremely high branching factor, reducing the depth of the tree and therefore the number of disk sectors that we need to access in any single operation. On creation of the file system, we calculate the branching factor of the tree in order to fill as much of each sector as possible with useful information.
+B-Trees are an efficient on-disk data structure, because we can use the whole of a block for one node. This gives us an extremely high branching factor, reducing the depth of the tree and therefore the number of blocks that we need to access in any single operation. On creation of the file system, we calculate the branching factor of the tree in order to fill as much of each block as possible with useful information.
 
-\subsection{The Free Map}
+\subsection{Free Map}
 \label{subsec:freemap}
 
 In order to allocate space efficiently, we can simply use an array of bits the size of the block device. We again want to have an on-disk data structure, or at least one that can easily be flushed to disk regularly. It was therefore beneficial to write my own bit array based on \texttt{Cstruct}s, rather than using a library implementation. This gives us the ability to write the whole structure directly onto the disk using the block device methods, without any cumbersome translation.
@@ -818,29 +848,27 @@ The \texttt{Cstruct} library performs data access in bytes. This leads us to \cr
 \section{Search Module}
 \label{sec:searchmodule}
 
-So we have our documents and we can access them without revealing which ones we are accessing. Now the final piece of the puzzle is actually performing search. We discuss building an Inverted Index, the data structure that will allow us to search efficiently, in \cref{subsec:invertedindex}. We then discuss the front-end of the whole application, the search API, in \cref{subsec:searchapi}.
+So we have our documents and we can access them without revealing which ones we are accessing. Now the final piece of the puzzle is actually performing search. We discuss building an inverted index, the data structure that will allow us to search efficiently, in \cref{subsec:invertedindex}. We then discuss the front-end of the whole application, the search API, in \cref{subsec:searchapi}.
 
 \subsection{Inverted Index}
 \label{subsec:invertedindex}
 
-The basics of Inverted Indexes are discussed in \cref{sec:invertedindexintro}. As stated there, the Index consists of two main structures, the dictionary and the postings. For the dictionary, we will do the usual thing, which is to implement it as a hash table. This provides us with $O(1)$ lookup and insertion, which are the main operations we will be performing. The postings are more flexible. In our implementation we want to store the file names, because they are not actually stored in the filesystem itself. We also want to perform intersection of postings lists, allowing us to perform phrase search. Thus, we will use a Hash Set, a data structure built on top of a hash table, that stores a set of keys, and has the added benefit of keeping them unique for us.
+The basics of inverted indexes are discussed in \cref{sec:invertedindexintro}. As stated there, the index consists of two main structures, the dictionary and the postings. For the dictionary, we will use the most common implementation, a hash table. This provides us with $O(1)$ lookup and insertion, which are the main operations we will be performing. The postings are more flexible. In our implementation we want to store the file names, because they are not actually stored in the file system itself. We also want to perform intersection of postings lists, allowing us to perform conjunctive queries. Thus, we will use a hash set, a data structure built on top of a hash table, that stores a set of keys, and has the added benefit of keeping them unique for us.
 
-Having decided on our data structure, we need to actually index files. As usual in this project, the files will be \texttt{Cstruct}s. So we have a number of steps to perform in order to process a file. We first convert the file to a string and immediately strip it of characters we don't need, pretty much all punctuation. At this point we have a sequence of alphanumeric character strings, separated by spaces and newlines, so we can perform a split on these characters to get a list of words.
+Having decided on our data structure, we need to actually index files. As usual in this project, the files will be \texttt{Cstruct}s. So we have a number of steps to perform in order to process a file. We first convert the file to a string and immediately strip it of characters we do not need, including all punctuation. At this point we have a sequence of alphanumeric character strings, separated by spaces and newlines, so we can perform a split on these characters to get a list of words.
 
-We could perform indexing now, adding the name of the current file to the postings list of every word in our list, but there are a couple of things that we want to do first. We really don't want to store separate words for `run', `ran', `runs', and so on, so we will perform some linguistic preprocessing, stemming the words using Porter's stemming algorithm. I used a small open-source library implementation of this algorithm. This technique not only reduces the size of the index, but also arguably improves search, because now queries for `run' can automatically returns documents containing any morphological derivation.
+We could perform indexing now, adding the name of the current file to the postings list of every word in our list, but there are a couple of things that we want to do first. We do not want to store separate words for `run', `ran', `runs', and so on, so we will perform some linguistic preprocessing. We will perform stemming, which uses a set of rules to prune suffixes, mapping words onto a stem. We will do this using Porter's stemming algorithm \cite{porter1980algorithm}. I used a small open-source library implementation of this algorithm, ocaml-stemmer. This technique not only reduces the size of the index, but also arguably improves search, because now queries for `run' can automatically returns documents containing morphological derivations. Finally, we remove duplicates from our list of words, reducing insertion overhead, and put the entries into the index.
 
-Finally, we remove duplicates from our list of words, reducing insertion overhead, and put the entries into the index.
-
-For our purposes we will only implement simple conjunctive phrase search, meaning we look for documents containing all of the words in a space separated query string. Now search is as simple as performing the same preprocessing on the query string, performing lookup on each of the queries in turn and taking the big intersection of the resulting list of hash sets. In order to make this intersection operation efficient, we sort the list by order of hash set size. Then we can filter the smaller hash set by checking for membership in the larger hash set. This means we perform one constant time lookup for each member of the small set, rather than the large, giving a large performance boost, as this smaller set is monotonically decreasing.
+For our purposes we will only implement simple conjunctive queries, meaning we look for documents containing all of the words in a space separated query string. Now to search we perform the same preprocessing on the query string, performing lookup on each of the queries in turn and taking the big intersection of the resulting list of hash sets. In order to make this intersection operation efficient, we sort the list by order of hash set size. Then we can filter the smaller hash set by checking for membership in the larger hash set. This means we perform one constant time lookup for each member of the small set, rather than the large, giving a large performance boost, as this smaller set is monotonically decreasing.
 
 \subsection{Keyword Search API}
 \label{subsec:searchapi}
 
 The final step in an end-to-end system is the API. We need to wrap file system access, indexing and search all into one module that provides a single point of entry for an encrypted search system.
 
-We have three main operations that are the most important to support. Writing files, reading files, and searching over files. We will not be concerned with deleting files at the moment, but it is left as an extension if time permits.
+We have three main operations that are the most important to support. Writing files, reading files, and searching over files. We will not be concerned with deleting files in this project, because they are not important for the evaluation of ORAM. 
 
-Writing files is the most important step, because this is where the search module does the indexing. On write, we first write through to the first system, then index the file and finally flush the index to disk to make sure it persists. Reading files is simply a pass through to the file system and search makes calls to inverted index.
+Writing files is the most important step, because this is where the search module does the indexing. On write, we first write through to the file system, then index the file and finally flush the index to disk to make sure it persists. Reading files is simply a pass through to the file system and search makes calls to inverted index.
 
 \section{Summary}
 \label{sec:implSummary}
@@ -851,36 +879,11 @@ We now move on to the important task of evaluation, where we make sure that I ha
 
 \chapter{Evaluation}
 
-% ### Functionality ###
-
-% Show that the unit tests show that individual components do what they are specified to do
-
-% Path ORAM reads in and out correctly
-
-% Encryption does make things encrypted
-
-% Search is sound and complete...
-
-% Etc.
-
-% Use QuickCheck to build randomised testing
-
-% ### Performance ###
-
-% Evaluate the performance of the code and do it with different configurations, varying functors used, size of input, potentially simulated network latency etc.
-
-% ### Security ###
-
-% Use statistical methods to show that access pattern is easily visible to Bob before applying ORAM to the system and the show statistical evidence the access pattern is hidden after applying ORAM
-
-% Show specifically that with the entire access pattern, the server can infer which documents are returned by each query, and could therefore perform the attack described by Islam et al.
-
-This chapter explains the methodology used to ensure the correctness of the ORAM implementation, as well as analysing its performance and security properties. \Cref{sec:overallResults} gives a summary of the results and compares them with expectations. \Cref{sec:unitTests} discusses functional testing through the use of Unit Testing and Randomised Testing. \Cref{sec:performanceTesting} then goes on to discuss performance, and then finally we analyse the security of ORAM in \cref{sec:statisticalAnalysis}.
-
-\section{Overall Results}
-\label{sec:overallResults}
+This chapter explains the methodology used to ensure the correctness of the ORAM implementation, as well as analysing its performance and security properties. \Cref{sec:unitTests} discusses functional testing through the use of unit testing and randomised testing. \Cref{sec:performanceTesting} then goes on to discuss performance, and then finally we analyse the security of ORAM in \cref{sec:statisticalAnalysis}.
 
 Overall, ORAM performed as expected in terms of functionality, performance, and security. It operated correctly, writing files and reading the same data back out. It continued to do so with the additions of statelessness, recursion, and encryption, so all parts of the system were functional separately and as a whole. In terms of performance, my implementation agreed with the theoretical bounds given in \citet{stefanov2013path}, which state $O(\log N)$ time overhead. Finally, statistical analysis showed that ORAM did indeed have a statistically random access pattern, ensuring the security of the implementation.
+
+If I had had more time, I would have performed more evaluation, examining different parameters of ORAM such as bucket size, extending experiments to larger ORAM sizes, and analysing different metrics such as bandwidth usage. Unfortunately experiments on ORAM take in the order of a few days to initialise and then a further day to run, so despite having a large amount of time to perform experiments, the nature of them restricted the amount that I could achieve.
 
 \section{Unit Tests}
 \label{sec:unitTests}
@@ -889,7 +892,7 @@ Unit testing was used throughout the development process, which allowed me to be
 
 \subsection{Stash}
 
-There three main cases to test for the stash:
+There are three main cases to test for the stash:
 
 \begin{itemize}
   \item Values not expected to be in the stash are not found
@@ -897,7 +900,7 @@ There three main cases to test for the stash:
   \item Adding dummy blocks to the stash has no effect
 \end{itemize}
 
-During the development process, I simply hand-coded a small number of example cases, but in order to test more extensively, I coded the above three cases as properties for randomised testing. This generates a number of test cases and verifies that the properties hold in every case and allows us to cover far more cases than hand-coded tests alone.
+During the development process, I hand-coded a small number of example cases, but in order to test more extensively, I coded the above three cases as properties for randomised testing. This generates a number of test cases and verifies that the properties hold in every case and allows us to cover far more cases than hand-coded tests alone.
 
 \subsection{Position Map}
 
@@ -945,9 +948,12 @@ The search module was tested for correctness, i.e. if a file containing a word h
 
 Before performing the main experiments, I decided to optimise the parameters of ORAM, in order to allow the experiments to run faster. The main parameter in question is the block size, which has been shown in \citet{ousterhout1985trace} to dramatically affect the speed of IO operations. I discovered that this was indeed the case with ORAM, as can be seen in \cref{fig:blockSizeResults}. It appeared that increasing the block size has an unbounded increase on performance, but I settled with a block size of 1MB to trade-off between speed and the possibility to specify the size the block device.
 
+It is important to note that using this in the cloud, we would see very different results. Increasing the block size will increase the size of the stash proportionally, because the maximum stash size is a constant number of blocks. Thus, a larger block size increases the amount of data that we must write to disk in order to achieve statelessness. We have shown that increasing block size increases speed when using a local disk, but network latency will dominate when running in the cloud, leading to a slow down. I would need to perform further experiments in the cloud to discover an optimal trade off point for this scenario.
+
 \begin{figure}
     \centering
-    \includegraphics[width=.8\linewidth]{blockSizeResults}
+    %\includegraphics[width=.8\linewidth]{blockSizeResults}
+    \input{blockSizeResults.tikz}
     \caption{Plot of the time taken to transfer 80MB of data at varying block sizes and sizes of ORAM. Each line represents one ORAM size, so we can see that as block size increases, the time decreases.}
     \label{fig:blockSizeResults}
 \end{figure}
@@ -961,7 +967,8 @@ For the actual experiment, rather than using the worst case sequence, we use a r
 
 \begin{figure}
     \centering
-    \includegraphics[width=.7\linewidth]{timeResults}
+    %\includegraphics[width=.8\linewidth]{timeResults}
+    \input{timeResults.tikz}
     \caption{The relationship between size of an ORAM in blocks and the time taken for 1000 operations, plotted for ORAM, encrypted ORAM, and a control block device with no ORAM. We take logs of both axes, because block size was increased in powers of two and we expect a log relationship.}
     \label{fig:timeResults}
 \end{figure}
@@ -985,7 +992,8 @@ Autocorrelation plotting plots the correlation of a sequence with itself at vari
     \centering
     \begin{subfigure}{.45\textwidth}
         \centering
-        \includegraphics[width=\linewidth]{shortAutocorr}
+        %\includegraphics[width=\linewidth]{shortAutocorr}
+        \scalebox{0.9}{\input{shortAutocorr.tikz}}
         \caption{Autocorrelation of a 200 iteration access pattern}
         \label{fig:shortAutocorr}
     \end{subfigure}
@@ -1019,13 +1027,15 @@ I successfully implemented the Path ORAM protocol and showed that my implementat
 
 \section{Lessons Learnt}
 
-This project has taught me many important lessons. The one that has had the most impact is time management. I got stuck into the project straight away and did as much work on it as I could during the Michaelmas term and vacation, which meant that hiccoughs later down the line had a large buffer and didn't cause severe consequences. Related to this I learnt that predicting the time that each part of a project will take is very difficult and it is therefore important to be both conservative and realistic about the number of things that will go wrong. Finally, I learnt that you should seek advice as soon as there are signs of trouble, rather than waiting for a scheduled meeting to brings something up. The advice of experienced supervisors can turn the seemingly catastrophic into a minor disruption.
+This project has taught me many important lessons. The one that has had the most impact is time management. I got stuck into the project straight away and did as much work on it as I could during the Michaelmas term and vacation, which meant that hiccoughs later down the line had a large buffer and didn't cause severe consequences. Related to this I learnt that predicting the time that each part of a project will take is very difficult and it is therefore important to be both conservative and realistic about the number of things that will go wrong. I learnt the importance of sharing your work with others through contribution to the Mirage community and being invited to talk about the project at Microsoft Research Cambridge. I would like to thank Markulf Kohlweiss from Microsoft Research for giving his advice on the project and giving me the opportunity to present my finidings. Finally, I learnt that you should seek advice as soon as there are signs of trouble, rather than waiting for a scheduled meeting to bring something up. The advice of experienced supervisors can turn the seemingly catastrophic into a minor disruption.
 
 \section{Future Work}
 
 There is still much work to be done in the field of ORAM. One of the main drawbacks of current schemes is that the size of the ORAM must be determined in advance and the overhead associated with expanding it is enormous. I would like to investigate the possibility of creating a resizable version of my implementation, however this was unfortunately not in the scope of this project.
 
-There are also many optimisations to be performed on this implementation. Along with many interesting optimisations mentioned in the literature, there is of course plenty of room for analysis and optimisation of this specific implementation using benchmarking to identify code hot-spots. This would of course only reduce the constants involved in the performance, rather than providing an asymptotic improvement.
+There are also many optimisations to be performed on this implementation. Along with many interesting optimisations mentioned in the literature, there is plenty of room for analysis and optimisation of this specific implementation using benchmarking to identify code hot-spots.
+
+I would also like to perform further analysis to get a deeper understanding of this implementation. I would like to perform further experiments on the initialisation stage of ORAM to understand how the size of the stash changes during this period. I would also like to spend more time adjusting various parameters, including block size and bucket size, attempting to find an optimal set of values for them.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % the bibliography
