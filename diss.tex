@@ -958,7 +958,7 @@ It is important to note that using this in the cloud, we would see very differen
 \begin{figure}
     \centering
     %\includegraphics[width=.8\linewidth]{blockSizeResults}
-    \input{blockSizeResults.tikz}
+    \input{blockSize.tex}
     \caption{Plot of the time taken to transfer 80MB of data at varying block sizes and sizes of ORAM. Each line represents one ORAM size, so we can see that as block size increases, the time decreases.}
     \label{fig:blockSizeResults}
 \end{figure}
@@ -973,7 +973,7 @@ For the actual experiment, rather than using the worst case sequence, we use a r
 \begin{figure}
     \centering
     %\includegraphics[width=.8\linewidth]{timeResults}
-    \input{timeResults.tikz}
+    \input{timeResults.tex}
     \caption{The relationship between size of an ORAM in blocks and the time taken for 1000 operations, plotted for ORAM, encrypted ORAM, and a control block device with no ORAM. We take logs of both axes, because block size was increased in powers of two and we expect a log relationship.}
     \label{fig:timeResults}
 \end{figure}
@@ -995,18 +995,18 @@ Autocorrelation plotting plots the correlation of a sequence with itself at vari
 
 \begin{figure}
     \centering
-    \begin{subfigure}{.45\textwidth}
+    \begin{subfigure}{\textwidth}
         \centering
         %\includegraphics[width=\linewidth]{shortAutocorr}
-        \scalebox{0.9}{\input{shortAutocorr.tikz}}
-        \caption{Autocorrelation of a 200 iteration access pattern}
+        \input{shortAutocorr.tex}
+        \caption{Autocorrelation plot of a 200 iteration access pattern}
         \label{fig:shortAutocorr}
     \end{subfigure}
-    \quad
-    \begin{subfigure}{.45\textwidth}
+    \begin{subfigure}{\textwidth}
         \centering
-        \includegraphics[width=\linewidth]{longAutocorr}
-        \caption{Autocorrelation of a 5,000 iteration access pattern}
+        %\includegraphics[width=\linewidth]{longAutocorr}
+        \input{longAutocorr.tex}
+        \caption{Autocorrelation plot of a 5,000 iteration access pattern}
         \label{fig:longAutocorr}
     \end{subfigure}
     \caption{Two autocorrelation plots, with the autocorrelation coefficient on the y-axis and time lag on the x-axis. The dashed black lines represent confidence bands of 95\% and 99\%.}
@@ -1019,7 +1019,8 @@ Runs testing attempts to detect non-random beheviour in a signal by counting the
 
 \begin{figure}
     \centering
-    \includegraphics[width=.8\linewidth]{runsTestPlot}
+    % \includegraphics[width=.8\linewidth]{runsTestPlot}
+    \input{runs.tex}
     \caption{The distribution of the number of runs in 1000 access patterns of length 180. The dashed black lines represent 0.05\% tail cut-offs, and 92.2\% of values fall within these bounds.}
     \label{fig:runsTestPlot}
 \end{figure}
