@@ -537,11 +537,11 @@ Finally, the search module made use of concepts from the field of Information Re
 \section{Encryption}
 \label{sec:encryption}
 
-ORAM's security is dependent on the security of the underlying encryption layer, therefore it is better to use a tested and trusted cryptographic library than to write a new one from scratch.
+ORAM's security depends on the security of the underlying encryption layer. Therefore, it is safer to use a trusted cryptographic library for this task, rather than implementing encrption directly.
 
-Conveniently, there is an existing implementation of an encrypted block device satisfying Mirage's \texttt{BLOCK} interface. It provides a functor, a module parameterised over a module interface. This functor takes a module that satisfies the \texttt{BLOCK} interface, and returns a new module, which satisfies the same interface but now uses encryption. This is the same way that ORAM is implemented, and allows this functor to be chained together with the ORAM functor to make an encrypted ORAM module.
+Conveniently, the OCaml library Mirage Block CCM creates encrypted block devices that satisfy Mirage's \texttt{BLOCK} interface. It provides a functor, which is a module parameterised over a module interface. This functor takes a module that satisfies the \texttt{BLOCK} interface, and returns a new module, which satisfies the same interface but now uses encryption. ORAM is implemented in the same way, allowing the functors to be chained together to make an encrypted ORAM module.
 
-To create the encrypted block device and later connect to it, a key must be provided. Key management is a very important problem, but it is left out of the scope of this project. For the purposes of this project, a constant, known key is used throughout the evaluation.
+To create the encrypted block device, and later connect to it, a key must be supplied. While key management would need to be dealt with properly in a real-world system, it is left out of the scope of this project. For the purposes of this project, a constant, known key is used throughout the evaluation.
 
 \begin{listing}[t]
 \caption{MirageOS's \texttt{BLOCK} module signature}
@@ -694,9 +694,9 @@ This is all of the structural information, so the \texttt{create} method can now
 
 \subsection{Accessing ORAM}
 
-Now that we have the client-side data structures and our ORAM module, we can almost implement \cref{alg:access}. Before we can though, we need the surrounding plumbing. The \texttt{BLOCK} interface functions \texttt{read} and \texttt{write} input/output data as a list of \texttt{Cstruct.t}s, so they must split this into chunks before calling \texttt{access} on each one. On the other side of access, we need the subroutines \textsc{ReadBucket} and \textsc{WriteBucket}, which access the underlying block storage.
+The main logic of ORAM resides in the \texttt{access} function, the implementation of \cref{alg:access}. Before discussing this, it is worth mentioning the plumbing that occurs on either side of it. The \texttt{BLOCK} interface function \texttt{write} inputs data as a list of \texttt{Cstruct.t}s with no defined size. The \texttt{access} function expects a fixed-sized block tagged with an address, so \texttt{write} splits the input into chunks and tags them before calling \texttt{access} on each one.
 
-It is the second two of these plumbing functions that have a much more interesting role. They are actually responsible for maintaining the logical binary tree structure. There are no physical pointers, but instead the structure is built purely through calculating the appropriate address of a bucket. The bucket on the path to leaf $x$ at level $l$ is calculated using \cref{alg:bucketaddress}.
+The subroutines \texttt{readBucket} and \texttt{writeBucket} are on the other size of \texttt{access}. They are responsible for communicating with the underlying block storage and, more importantly, maintaining the structure of the logical binary tree. There are no physical pointers, but instead the structure is built by calculating the appropriate physical address of a bucket. The physical address of the bucket on the path to leaf $x$ at level $l$ is calculated using \cref{alg:bucketaddress}.
 
 \begin{algorithm}[t]
   \footnotesize
@@ -715,11 +715,9 @@ It is the second two of these plumbing functions that have a much more interesti
     \EndFunction
   \vskip 10pt
   \end{algorithmic}
-  \caption{Calculating the address of the bucket at level $l$ on the path to leaf $x$}
+  \caption{Calculating the physical address of the bucket at level $l$ on the path to leaf $x$}
   \label{alg:bucketaddress}
 \end{algorithm}
-
-This is most easily explained using \cref{fig:bucketaddress}. Here we can see the nodes labelled in order of their position in memory. The leaves are also labelled, but the binary representations of these labels are actually more important. The binary representation, read from left to right, tells us how to reach the leaf. To get to leaf 5, with binary representation 101, we go right, left, right. When we go left, we double the label on the node and add one, and when we go right, we add two. Multiplying this node label by the block size and the bucket size gives us the physical address of the node. So for a node at level $l$, we only compare the first $l$ bits, following the procedure above.
 
 \begin{figure}[t]
     \centering
@@ -770,33 +768,49 @@ This is most easily explained using \cref{fig:bucketaddress}. Here we can see th
   \label{fig:bucketaddress}
 \end{figure}
 
-With this plumbing in place, we can input/output data from the outside and the underlying block device. Now we can implement \cref{alg:access}. Remapping the blocks requires a call to a pseudo-random function, reading in the path adds the contents of each bucket to the stash, and writing new data looks up a block in the stash and gives it a new data value. The final part is lines 11-16. This is where we decide which blocks should be put into the path.
+This is most easily explained using \cref{fig:bucketaddress}. Here the nodes are labelled in order of their position in memory. The leaves are also labelled, but the binary representations of these labels are more important. The binary representation of leaf $x$, read from left to right, denotes the set of operations required to calculate the physical address of $x$. A 0 denotes taking the left branch at a node, labelled $n$, and the resulting node has label $2n + 1$. A 1 denotes taking the right branch, and the resulting node has label $2n+2$. For example, the path to leaf 5, with binary representation 101, takes the right branch from the root, then the left branch, and then the right, giving $$2 \cdot (2 \cdot (2 \cdot 0 + 2) + 1) + 2 = 12.$$ Multiplying this node label by the block size and the bucket size gives the physical address of the node. The same procedure can be used for a node at a specific level, $l$, but now only the path denoted by the first $l$ bits will be followed.
 
-The naive implementation of this, and that suggested by \cref{alg:access}, loops through the stash and finds blocks such that the bucket at level $l$ on the path to leaf $\mathsf{position[a']}$ is the same as the bucket at level $l$ on the path to leaf $x$. There are two small optimisations we can make here. The first is to perform the position lookup only once, attaching positions to the blocks in a temporary data structure, avoiding repeated work at each level. The second avoids calculating the bucket addresses entirely. We can do this by noting that in order for the paths to two leaves to intersect at level $l$, the leaves must have the same first $l$ bits. Thus, we can perform a right bit shift on both $x$ and $\mathsf{position[a']}$ of $\mathtt{height} - l$ bits, and check for equality.
+The final part of ORAM is the \texttt{access} function. Its parameters are \texttt{op}, which is either \texttt{read} or \texttt{write}, \texttt{a}, which is the address of the block to access, and \texttt{data'}, which contains the data to be written when \texttt{op} is \texttt{write}. \texttt{data'} is implemented using an option type, so when \texttt{op} is \texttt{read}, \texttt{data'} will have value \texttt{None}.
 
-We now have a functioning ORAM functor, that can be used to augment a block device in any Mirage program. In \cref{subsec:recursion,subsec:statelessness} we look at optimisations and extensions to this ORAM construction, before moving onto to the further aims of the project.
+In \cref{sec:oramintro}, \texttt{access} was split into four steps:
+\begin{enumerate}
+    \item Remap the address, \texttt{a}, in the position map,
+    \item Read the path that \texttt{a} was previously mapped to,
+    \item If \texttt{op} is \texttt{write}, then write \texttt{data'} into the block with address \texttt{a} in the stash,
+    \item Write the same path back, but filled with new blocks from the stash.
+\end{enumerate}
+
+Step 1 calls a pseudo-random function to choose a new position for the block uniformly at random. This operation ensures the security of the Path ORAM construction by making subsequent accesses to the same address statistically independent.
+
+Step 2 calculates the physical address for each bucket along the path using the subroutines described above, then reads the contents of each bucket into the stash.
+
+Step 3 looks up the block with address \texttt{a} in the stash, stores its current data to be returned by the function, and then replaces it with \texttt{data'}.
+
+Step 4 decides which blocks to write back into the path. The na\"ive implementation of this, suggested by \cref{alg:access}, loops through the stash and finds blocks with address \texttt{a'} such that the bucket at level $l$ on the path to leaf $\mathtt{position[a']}$ is the same as the bucket at level $l$ on the path to leaf $x$. I made two optimisations to this implementation. The first is to perform the position lookup only once, tagging blocks with their positions in a temporary data structure to avoid repeated work at each level. The second avoids calculating the bucket addresses entirely. In order for the paths to two leaves to intersect at level $l$, the leaves must have the same first $l$ bits. Thus, checking for intersection can be reduced to performing a right bit shift on both $x$ and $\mathtt{position[a']}$ of $\mathtt{height} - l$ bits, and checking for equality.
+
+This concludes the discussion of the basic ORAM functor, that can be used to augment a block device in any Mirage program. \cref{subsec:recursion,subsec:statelessness} examine the addition of recursion and statelessness to this ORAM construction.
 
 \subsection{Recursion}
 \label{subsec:recursion}
 
-The essence of recursive ORAM, is that the position map of one ORAM is another ORAM. Thus, we can extend our original ORAM functor, parameterising it in the implementation of the position map. To do this we use a single interface, that is satisfied by both the in memory position map and the ORAM module. We can apply this new ORAM functor with the in memory position map module to get our original construction. However, we can now take this further, applying the functor again with the result of the first application, and this can be done to an arbitrary depth. This is an exhibition of the power of OCaml's module system.
+The essence of recursive ORAM, is that the position map of one ORAM is another ORAM. To make this possible, I extended the original ORAM functor, parameterising it in a new \texttt{PositionMap} interface. This interface is satisfied by the original, in-memory position map module, but is also satisfied by the ORAM functor itself. Apply this new ORAM functor once with the in-memory position map module, gives the basic ORAM functor discussed above. However, applying the functor again with the result of the first application, gives a recursive ORAM module with one level of recursion. This can be repeated to an arbitrary depth. This is an exhibition of the power of OCaml's module system.
 
-We can use the method above to build the recursive ORAM module by hand, applying the functor $n + 1$ times for $n$ levels of recursion. However, it is better to have a more automatic solution, where the recursive module is built automatically based on the size of the data ORAM, ORAM$_0$. Our addresses are 64-bit integers, so they take 8 bytes of storage each. If ORAM$_0$ has size $N$ in blocks, and the size of each block is $B$ bytes, then one block in ORAM$_1$ being used as the position map for ORAM$_0$ can store $\chi = B / 8$ addresses. The number of blocks required for ORAM$_1$ will therefore be $N / \chi$. After $\log N / \log \chi$ recursions, we will have a constant sized position map.
+The recursive ORAM module can be constructed manually as above, applying the functor $n + 1$ times for $n$ levels of recursion. However, it is preferable to build the recursive module automatically based on the size of the data ORAM, ORAM$_0$. Addresses are 64-bit integers, so they take 8 bytes of storage each. If ORAM$_0$ has size $N$ in blocks, and the size of each block is $B$ bytes, then one block in ORAM$_1$ being used as the position map for ORAM$_0$ can store $\chi = B / 8$ addresses. The number of blocks required for ORAM$_1$ will therefore be $N / \chi$. After $\log N / \log \chi$ levels of recursion, the in-memory position map will have size $O(1)$.
 
-So, to create a recursive ORAM, we take in the size, $N$, and the block size, $B$, and automatically apply the ORAM functor recursively $\log N / \log \chi$ times. Calling the $\mathtt{create}$ function of the resulting module will create ORAM instances with the correct number of levels of recursion.
+So, the recursive ORAM module is created by taking in the size, $N$, and the block size, $B$, and automatically applying the ORAM functor recursively $\log N / \log \chi$ times. Calling the $\mathtt{create}$ function of the resulting module will create ORAM instances with the correct number of levels of recursion.
 
 \subsection{Statelessness}
 \label{subsec:statelessness}
 
-In order to achieve statelessness for ORAM, we need to store type information, the stash, and the position map. We will first talk about how to layout all of this information on disk, before moving on to talk about how we actually get it there.
+In order to achieve statelessness for ORAM, type information, the stash, and the position map must all be stored on disk. The layout of this information on disk is explained first, followed by the method flushing it to disk.
 
-Once we have initialised ORAM and begun to use it, we do not want to move it around on disk, because we would have to copy the whole data structure. We do however need to store the information necessary to discover ORAMs existence in a well-known location, in order to allow us to reconnect to it. This leads us to storing a what is called a superblock in the first block of the underlying block device. This block will contain a pointer to the location of the rest of the state, along with its length. This way, we can store ORAM starting at the second location on disk, and then append all of the state at the end of the ORAM section, meaning we will never have to move ORAM once we have initialised it.
+Once ORAM has been initialised and is in use, relocating it on disk is very expensive, because the whole data structure would need to be copied. However, to reconnect to ORAM the information necessary to discover ORAMs existence must be stored in a well-known location. The first block of the underlying block device is therefore used as a superblock, which is a block containing the most important metadata. This superblock contains a pointer to the location of the rest of the state, along with its length. This way, ORAM can be stored starting at the second location on disk, and all of the state can be appended at the end of the ORAM section, meaning ORAM never has to be moved once it has been initialised.
 
-Now we actually need to store the state, which means we need some method of serialising it, ready to be written to disk. We could implement this manually, but for the majority of the information we can take advantage of an existing serialisation library, Jane Street's Bin\_prot. This is a binary protocol, that allows you to annotate a type with \texttt{[@@ deriving bin\_io]} and will then generate functions to read and write instances of the type into buffers. We are able to use this for all of the type information for ORAM, as well as for the stash. This leads us to splitting the ORAM type into a core, that can use Bin\_prot, and an extended type, that includes the position map and the underlying block device. This structure is shown in \cref{lst:orammaketype}.
+To store the state, it must be serialised first, which translates into a form that can be written to disk. For the majority of the information an existing serialisation library, Jane Street's Bin\_prot, can be used. This is a binary protocol, that allows one to annotate a type with \texttt{[@@ deriving bin\_io]} and will then generate functions to read and write instances of the type into buffers. This is used for all of ORAM's type information, as well as for the stash, but not for the position map. ORAM's type is therefore split into a core, that can use Bin\_prot, and an extended type, which includes the position map and the underlying block device. This structure is shown in \cref{lst:orammaketype}.
 
-The position map is more difficult to serialise, because under recursive ORAM, it might actually be another ORAM. We don't want to write the entire of the position map ORAM onto the disk a second time, so we need a custom serialisation function for the position map that will store only meta-data for ORAM position maps, and will store the entire position map in the base case. We want to store all state right at the end of the block device, after all recursive instances, so this function actually collects the data from all the levels of recursion together into one buffer.
+The position map is more difficult to serialise, because under recursive ORAM, it might be another ORAM. To avoid writiting the entire of the position map ORAM onto the disk a second time, a custom serialisation function is needed that will store only metadata for ORAM position maps, but will store the entire position map in the base case. The state is stored at the end of the block device, after all recursive instances, so this function collects the data from all the levels of recursion together into one buffer.
 
-Now that we can write all of the major parts into the buffer, we collect everything together and flush it to the end of the block device. After this is done, we are able to disconnect from ORAM safely. Reconnecting to ORAM is now a case of checking for the presence of the superblock, reading in the location and length of the state, reading the actual state, and then calling the connect function on the position map. The connect function allows each recursive ORAM instance to have its own reference to the underlying block device and returns once it reaches the in memory position map.
+After all the state has been flushed to disk, it is safe to disconnect from ORAM. Reconnecting to ORAM is a case of checking for the presence of the superblock, reading in the location and length of the state, reading the actual state, and then calling the connect function on the position map. The connect function allows each recursive ORAM instance to have its own reference to the underlying block device and returns once it reaches the in-memory position map.
 
 \section{File System}
 \label{sec:fileSystem}
