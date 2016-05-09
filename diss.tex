@@ -77,8 +77,7 @@ College:            & \bf Homerton College                     \\
 Project Title:      & \bf Encrypted Keyword Search Using \\
 & \bf Path ORAM on MirageOS \\
 Examination:        & \bf Computer Science Tripos -- Part II, July 2016  \\
-Word Count:         & \bf \footnotemark[1]
-                      (well less than the 12000 limit)  \\
+Word Count:         & \bf 10595\footnotemark[1] \\
 Project Originator: & Dr Nik Sultana                    \\
 Supervisors:         & Dr Nik Sultana \& Dr Richard Mortier                    \\
 \end{tabular}
@@ -88,18 +87,19 @@ by \texttt{detex diss.tex | tr -cd '0-9A-Za-z $\tt\backslash$n' | wc -w}
 }
 \stepcounter{footnote}
 
-
 \section*{Original Aims of the Project}
 
 % Give a 100 word summary of what was to be achieved by the project, i.e. secure searchable encrypted documents
 
+The main aim of this project was to implement the recent Path ORAM cryptographic protocol, which hides access patterns to underlying storage devices. This provides a method of implementing secure encrypted keyword search, which is a motivating application of ORAM. The second aim was therefore to build a file system with keyword search on top of ORAM. Another significant aim of this project was to evaluate ORAM and compare my results with theoretical and empirical bounds presented in the literature.
+
 \section*{Work Completed}
 
-
+I implemented Path ORAM, and added extensions of recursion and statelessness, making it possible to disconnect from and reconnect to ORAM. On top of this, I built an inode-based file system, which included the implementation of a B-Tree library. Finally, I built a search module that uses an inverted index to perform search over the documents in the file system. I evaluated the implementation, testing its functionality, performance, and statistical security.
 
 \section*{Special Difficulties}
 
-
+The evaluation of ORAM presented difficulty because of the extensive set-up required. Each ORAM block device takes several days to initialise, depending on its size, and performing experiments on the device takes at least another day. The evaluation process thus took longer than expected, since I had to test ORAMs of varying sizes and sets of features in this way.
 
 \newpage
 \section*{Declaration}
@@ -112,10 +112,10 @@ does not contain material that has already been used to any substantial
 extent for a comparable purpose.
 
 \bigskip
-\leftline{Signed [signature]}
+\leftline{Signed}
 
 \medskip
-\leftline{Date [date]}
+\leftline{Date}
 
 \tableofcontents
 
@@ -315,7 +315,7 @@ MirageOS is a unikernel operating system. In other words, a MirageOS application
 
 This project uses the framework illustrated in \cref{fig:cloudInstance}. The focus is on implementing the code for the cloud instance, which consists of the implementation of Path ORAM, a file system running on top of it, and a search module that presents an API to the user. Writing interfaces for specific cloud storage providers is left as future work, so for the purposes of this project a local block device is used for storage.
 
-MirageOS provides an interface for a block device, \texttt{BLOCK}. The ORAM module is designed to satisy this interface, so that it can be inserted into exisiting Mirage applications. It is also designed to run on any underlying storage that satisfies \texttt{BLOCK} and, thus, interfaces for cloud storage providers could be written to be compatible with ORAM. The encryption module is designed in the same way, so it can be inserted between ORAM and the underlying storage. \Cref{fig:miragestack} shows the overall structure of the application.
+MirageOS provides an interface for a block device, \texttt{BLOCK}. The ORAM module is designed to satisfy this interface, so that it can be inserted into existing Mirage applications. It is also designed to run on any underlying storage that satisfies \texttt{BLOCK} and, thus, interfaces for cloud storage providers could be written to be compatible with ORAM. The encryption module is designed in the same way, so it can be inserted between ORAM and the underlying storage. \Cref{fig:miragestack} shows the overall structure of the application.
 
 \setlength{\unitlength}{0.75mm}
 \input{mirageStackBody}
@@ -337,7 +337,7 @@ Building ORAM is the core focus of the project and as such is given high priorit
 
 OCaml is the logical choice of programming language when building for MirageOS, because Mirage applications and libraries all use OCaml. However, OCaml's module and type systems were also considerations in the choice of Mirage for this project.
 
-OCaml has a powerful module system. It allows one to build \emph{functors}, which are modules parameterised over module interfaces. Any module that satisfies the interface can be given to the functor to create a new concrete module. ORAM can therefore be implemented as a functor that is parameterised over the \texttt{BLOCK} interface.
+OCaml has a powerful module system. It allows one to build \emph{functors}, which are modules parametrised over module interfaces. Any module that satisfies the interface can be given to the functor to create a new concrete module. ORAM can therefore be implemented as a functor that is parametrised over the \texttt{BLOCK} interface.
 
 OCaml's static typing system is an indispensable tool for ensuring the correctness of programs and for increasing productivity.
 
@@ -376,7 +376,7 @@ Stemmer & 0.2 & Linguistic Processing & GNUv2 \\
 \subsection{Development Environment}
 
 Choosing the right tools is essential to the productivity of large projects. For OCaml, one of the most important tools is OASIS, which automatically generates Makefiles for a project, based on a specification file. Direct use of the OCaml compiler quickly becomes infeasible when linking together a large number of modules. OASIS deals with this automatically.
-Emacs proved incredibly useful, because code indentation, syntax highlighting, autocompletion, and type inspection are all provided by third-party plugins. Code can be interpreted, compiled, and run from a shell within Emacs, which boosts productivity.
+Emacs proved incredibly useful, because code indentation, syntax highlighting, autocompletion, and type inspection are all provided by third-party plug-ins. Code can be interpreted, compiled, and run from a shell within Emacs, which boosts productivity.
 
 \begin{table}[t]
     \centering
@@ -425,11 +425,11 @@ At the inter-modular level, integration of all parts of the system required care
 
 For encryption, an appropriate library had to be chosen, a process that involved filing a pull request to fix a critical bug.
 
-The ORAM module presented the challenge of translating the terse pseudocode of the Path ORAM protocol into a functioning program. This included designing a position map capable of operating on machines of any word size, and building functions to marshall data to and from the format required by ORAM. Adding recursion to this implementation warranted a deeper understanding of the module system, including first class and recursive modules. To achieve statelessness I had to serialise recursive data structures, which meant writing custom functions to conform with a binary protocol.
+The ORAM module presented the challenge of translating the terse pseudocode of the Path ORAM protocol into a functioning program. This included designing a position map capable of operating on machines of any word size, and building functions to marshal data to and from the format required by ORAM. Adding recursion to this implementation warranted a deeper understanding of the module system, including first class and recursive modules. To achieve statelessness I had to serialise recursive data structures, which meant writing custom functions to conform with a binary protocol.
 
 The implementation of a minimal, but complete, inode-based file system required investigation into the choices made by many file system designers before me. I weighed these against the demands of my system and included only the necessary elements. Furthermore, my file system entailed an implementation of B-Trees, which did not previously exist in OCaml. I therefore implemented a B-Tree library myself that can be applied to other Mirage applications, representing a contribution to the community.
 
-Finally, the search module made use of concepts from the field of Information Retrieval, including algorithms and data structures. The decision to include stemmming represented a significant trade-off between the space used by the indexing process and its precision.
+Finally, the search module made use of concepts from the field of Information Retrieval, including algorithms and data structures. The decision to include stemming represented a significant trade-off between the space used by the indexing process and its precision.
 
 \begin{figure}
     \centering
@@ -538,9 +538,9 @@ Finally, the search module made use of concepts from the field of Information Re
 \section{Encryption}
 \label{sec:encryption}
 
-ORAM's security depends on the security of the underlying encryption layer. Therefore, it is safer to use a trusted cryptographic library for this task, rather than implementing encrption directly.
+ORAM's security depends on the security of the underlying encryption layer. Therefore, it is safer to use a trusted cryptographic library for this task, rather than implementing encryption directly.
 
-Conveniently, the OCaml library Mirage Block CCM creates encrypted block devices that satisfy Mirage's \texttt{BLOCK} interface. It provides a functor, which is a module parameterised over a module interface. This functor takes a module that satisfies the \texttt{BLOCK} interface, and returns a new module, which satisfies the same interface but now uses encryption. ORAM is implemented in the same way, allowing the functors to be chained together to make an encrypted ORAM module.
+Conveniently, the OCaml library Mirage Block CCM creates encrypted block devices that satisfy Mirage's \texttt{BLOCK} interface. It provides a functor, which is a module parametrised over a module interface. This functor takes a module that satisfies the \texttt{BLOCK} interface, and returns a new module, which satisfies the same interface but now uses encryption. ORAM is implemented in the same way, allowing the functors to be chained together to make an encrypted ORAM module.
 
 To create the encrypted block device, and later connect to it, a key must be supplied. While key management would need to be dealt with properly in a real-world system, it is left out of the scope of this project. For the purposes of this project, a constant, known key is used throughout the evaluation.
 
@@ -792,7 +792,7 @@ This concludes the discussion of the basic ORAM functor, which can be used to au
 \subsection{Recursion}
 \label{subsec:recursion}
 
-The essence of recursive ORAM is that the position map of one ORAM is another ORAM. To make this possible, I extended the original ORAM functor, parameterising it in a new \texttt{PositionMap} interface. This interface is satisfied by the original, in-memory position map module, as well as by the ORAM functor itself. Applying this new ORAM functor once with the in-memory position map module gives the basic ORAM functor discussed above. However, applying the functor again, with the result of the first application, gives a recursive ORAM module with one level of recursion. This can be repeated to an arbitrary depth. This exhibits the power of OCaml's module system.
+The essence of recursive ORAM is that the position map of one ORAM is another ORAM. To make this possible, I extended the original ORAM functor, parametrising it in a new \texttt{PositionMap} interface. This interface is satisfied by the original, in-memory position map module, as well as by the ORAM functor itself. Applying this new ORAM functor once with the in-memory position map module gives the basic ORAM functor discussed above. However, applying the functor again, with the result of the first application, gives a recursive ORAM module with one level of recursion. This can be repeated to an arbitrary depth. This exhibits the power of OCaml's module system.
 
 The recursive ORAM module can be constructed manually as above, applying the functor $n + 1$ times for $n$ levels of recursion. However, it is preferable to build the recursive module automatically, based on the size of the data ORAM, ORAM$_0$. Addresses are 64-bit integers, so they occupy 8 bytes of storage each. If ORAM$_0$ has size $N$ in blocks, and the size of each block is $B$ bytes, then one block in ORAM$_1$, used as the position map for ORAM$_0$, can store $\chi = B / 8$ addresses. The number of blocks required for ORAM$_1$ will therefore be $N / \chi$. After $\log N / \log \chi$ levels of recursion, the in-memory position map will be of size $O(1)$.
 
@@ -834,14 +834,14 @@ B-Trees are a generalisation of self-balancing binary search trees, where each n
 
 B-Trees are an efficient on-disk data structure because a whole block can be used for one node. This gives an extremely high branching factor, reducing the depth of the tree and therefore the number of blocks that need to be accessed in any single operation. On creation of the file system, the branching factor of the tree is calculated such that as much of each block as possible is filled with useful information.
 
-I implemented B-Trees as a functor, which is parameterised in three module interfaces: one for the nodes, one for the allocation module, and one for the storage module. This makes the library more generalised, which means it may find wider use in the OCaml community. For the purposes of this project, I wrote a node module that uses 16-bit pointers between nodes, and stores \texttt{int64} inode pointers. For the allocation and the storage modules, this project uses the free map, described in \cref{subsec:freemap}, and the ORAM module, respectively.
+I implemented B-Trees as a functor, which is parametrised in three module interfaces: one for the nodes, one for the allocation module, and one for the storage module. This makes the library more generalised, which means it may find wider use in the OCaml community. For the purposes of this project, I wrote a node module that uses 16-bit pointers between nodes, and stores \texttt{int64} inode pointers. For the allocation and the storage modules, this project uses the free map, described in \cref{subsec:freemap}, and the ORAM module, respectively.
 
 \subsection{Free Map}
 \label{subsec:freemap}
 
 To allocate space efficiently, an array of bits the size of the block device can be used. For statelessness, the free map is flushed to disk regularly. Therefore, it was beneficial to write my own bit array based on \texttt{Cstruct}s, rather than using a library implementation. This allows the whole structure to be written directly onto the disk using the block device methods, without any costly translation.
 
-The \texttt{Cstruct} library performs data access in bytes. This leads to \cref{alg:bitgetset} for getting and setting individual bits. To get the $n^{th}$ bit, it must be extracted from the $\frac{n}{8}^{th}$ byte. To do this, the index of the bit in the byte is calculated, a 1 is left-shifted to that position, and an and operation is performed, which masks that bit. Setting is a similar operation, but seeks to preserve the surrounding bits. To set a 1, the index of the bit in the byte is calculated, a 1 is shifted to that position, and an or operation is peformed, which sets the bit to 1 while preserving all other bits. Setting a 0 is slightly trickier. It would be performed by an and operation with a bit string that is 0 at the desired position and 1 everywhere else, but shifting fills empty bits with 0s. Instead, by the use of De Morgan's Law $$ a~\&\&~b = \neg (\neg a~||~\neg b) $$ this is converted into an operation involving a bit string that has a 1 at the desired position and 0s everywhere else.
+The \texttt{Cstruct} library performs data access in bytes. This leads to \cref{alg:bitgetset} for getting and setting individual bits. To get the $n^{th}$ bit, it must be extracted from the $\frac{n}{8}^{th}$ byte. To do this, the index of the bit in the byte is calculated, a 1 is left-shifted to that position, and an and operation is performed, which masks that bit. Setting is a similar operation, but seeks to preserve the surrounding bits. To set a 1, the index of the bit in the byte is calculated, a 1 is shifted to that position, and an or operation is performed, which sets the bit to 1 while preserving all other bits. Setting a 0 is slightly trickier. It would be performed by an and operation with a bit string that is 0 at the desired position and 1 everywhere else, but shifting fills empty bits with 0s. Instead, by the use of De Morgan's Law $$ a~\&\&~b = \neg (\neg a~||~\neg b) $$ this is converted into an operation involving a bit string that has a 1 at the desired position and 0s everywhere else.
 
 \begin{algorithm}[t]
 \caption{Getting and setting individual bits in a byte array}
@@ -929,39 +929,39 @@ During the development process, I hand-coded a small number of example cases. La
 
 Two main aspects of the position map need to be tested. Firstly, the translation of 64-bit addresses into three integer indexes, and, secondly, its operation as a data structure.
 
-The code performing the translation is essentially a mathematical definition in itself, so any property definition that might be used for randomised testing would be equivalent to the original code. Thus, in this instance, a few hand-chosen random cases can be checked, along with the key edge cases. The edge cases to check are the maximum and minimum values, along with values either side of a change in the higher indices, that is values with output $(x,y,max\_int)$ and $(x,y+1,0)$, and similarly for the higher index.
+The code performing the translation is essentially a mathematical definition in itself, so any property definition that might be used for randomised testing would be equivalent to the original code. Thus, in this instance, a few hand-chosen random cases can be checked, along with the key edge cases. The edge cases to check are the maximum and minimum values, along with values either side of a change in the higher indices. That is, values with output $(x,y,max\_int)$ and $(x,y+1,0)$, and similarly for the higher index.
 
-In terms of operation, we want to check that on adding a value to the position map, we read back the same value, and that trying to add a value at an address outside of the allowed range results in an error. Both of these cases can be coded up as properties for randomised testing.
+In terms of operation, it is necessary to check that after adding a value to the position map, the same value is read back, and, furthermore, that trying to add a value at an address outside of the allowed range results in an error. Both of these cases can be coded up as properties for randomised testing.
 
 \subsection{ORAM}
 
-The ORAM implementation is particularly amenable to randomised testing, because we tend to define inverse functions for most of its functionality. This makes it very easy to write properties for randomised testing of the form $f(f^{-1}(x)) = x$. This allows us to check that each stage of ORAM is operating correctly, from writing individual blocks, through writing entire paths, to writing entire files.
+The ORAM implementation is particularly amenable to randomised testing because there are inverse functions for most of its functionality. It is therefore possible to write properties for randomised testing of the form $f(f^{-1}(x)) = x$. This allows each stage of ORAM to be tested independently, from writing individual blocks, through writing whole paths, to writing entire files.
 
-For other functions that were not so easy to code properties for, regular unit testing was used. These include reconnecting to ORAM to test statelessness, and performing simple calculations, such as computing the height for ORAM.
+Regular unit testing was performed on other functions, for which properties could not be easily coded. These functions include reconnecting to ORAM to test statelessness, and performing calculations, such as computing the height for ORAM tree.
 
 \subsection{Free Map}
 
-The Free Map allocates blocks in the block device to be used by different parts of the file system. We need to make sure that on creation, it allocates the correct number of initial blocks, and then subsequently always allocates the correct number of blocks, if they are available, and only ever allocates blocks that are actually free.
+The free map allocates blocks in the block device to be used by different parts of the file system. It is necessary to test that, on creation, the map allocates the correct number of initial blocks, that it always allocates the correct number of blocks if they are available, and that it only ever allocates blocks that are actually free.
 
-During development, I used only a handful of test cases, covering some of the most important edge cases. This included creating the map, and checking that nothing was allocated to begin with except the first $n$, where $n$ is passed into the creation function. Then, I checked that allocating and deallocating a few different sequences of blocks led to the expected results. Finally, I checked that if there were not enough free blocks, that an error was returned.
+During development, I used a selection of test cases which covered important edge cases. These included creating the map, and checking that nothing was allocated to begin with, except the first $n$ blocks, where $n$ is a parameter of the creation function. Then, I tested that allocating and deallocating different sequences of blocks led to the expected results. Finally, I checked that an error was returned if there were not enough free blocks.
 
-After main development had finished, I added some randomised testing to this module to cover a wider range of inputs.
+After main development was completed, I added some randomised testing to this module to cover a wider range of inputs.
 
 \subsection{B-Trees}
 
-It is not possible to test the B-Tree library directly, because it only gives us a functor to create a B-Tree. Thus the B-Tree was tested using the Inode Index, the canonical use case of the library in this system. In order to test the B-Tree properly, it was necessary to use randomised testing to create a reasonable access pattern that was guaranteed to cause splitting of the root node.
+It is not possible to test the B-Tree library directly because it only provides a functor to create a B-Tree. Hence, I tested the B-Tree using the inode index, the canonical use case of the library in this system. In order to test the B-Tree properly, I used randomised testing to create a reasonable access pattern that was guaranteed to cause splitting of the root node.
 
 \subsection{Inodes}
 
-The inodes needed to be tested to make sure they could add and delete pointers, while maintaining a correct count. This is again amenable to randomised testing, although unit tests were also used throughout the development to test specific cases that would be expected to cause exceptions.
+The inodes were tested to make sure they  added and deleted pointers, while maintaining a correct count. Again, this is amenable to randomised testing, although unit tests were also used throughout the development to test specific cases that would be expected to cause exceptions.
 
 \subsection{File System}
 
-In order to test the file system I created a large number of random files and used randomised testing to ensure that under any access pattern the correct files were always read back out once they had been written in. This also included testing to ensure that reasonable exceptions were produced when the file system became full, or a file did not exist in the system.
+To test the file system, I created a large number of random files and used randomised testing to ensure that the correct files were always read back out once they had been written in, under any access pattern. This also included testing to ensure that reasonable exceptions were produced when the file system became full, or a file did not exist in the system.
 
 \subsection{Search Module}
 
-The search module was tested for correctness, i.e. if a file containing a word had been put into the system, then it would appear in the search results. This was difficult to randomise, so I manually constructed a number of test scenarios.
+The search module was tested for correctness, i.e. that if a file containing a word had been put into the system, then it would appear in the search results for that word. This was difficult to randomise, so I manually constructed a number of test scenarios.
 
 \section{Performance Testing}
 \label{sec:performanceTesting}
@@ -984,9 +984,15 @@ It is important to note that using ORAM in the cloud would give very different r
 \subsection{Comparison with Literature}
 \label{subsec:comparisonWithLiterature}
 
-In order to effectively test the overheads due to ORAM, two things needed to be done very carefully. The first was isolating and removing major sources of uncertainty. When I first ran the experiments, I attempted to run them on my local machine. In this environment, other processes interfered with the ORAM process, making the results unreliable. I secured a remote testing machine in order to run the experiments in complete isolation. Here, at first, they were running on an NFS mounted drive, meaning that network latency and protocol overheads were affecting the results. After moving the experiments to local disk, it was clear that ORAM overheads were finally dominating the results. Now, secondly, I needed to initialise the ORAMs properly. Using a fresh ORAM, the stash is empty and most of the blocks are dummy blocks that get disregarded. It is necessary to run an initialisation sequence in order to remove the effects of these on the results. We use the worst case sequence, writing each block in turn, then reading each block in turn, to ensure that all blocks get used multiple times, leaving the ORAM in a state that it would likely be in after extended use. Only once this steady state has been reached can we reliably test the performance.
+Two steps were taken to effectively test the overheads due to ORAM.
 
-For the actual experiment, rather than using the worst case sequence, we use a random sequence of block accesses. We perform 10 runs of 1000 iterations each, oscillating between reads and writes in order to balance the different overheads. We are trying to see how the performance changes as the block size increases, so we use ORAMs of a range of sizes, from 12 blocks (a tree of depth 1) to 4092 blocks (a tree of depth 9). The log of the time taken for each ORAM to perform 1000 iterations is plotted against the logarithm of the size of the ORAM in \cref{fig:timeResults}. We expect this to be a straight line, because we expect logarithmic overheads from ORAM, and we increase the block sizes roughly in powers of two. We can see that ORAM does indeed show a logarithm overhead compared to the control experiment that performed the same sequence of accesses to a block device without ORAM. I performed the same experiment adding encryption to ORAM and we can see that the overhead was still logarithmic, but with a larger constant.
+The first was to isolate and remove major sources of uncertainty. When I first ran the experiments, I attempted to run them on my local machine. In this environment, other processes interfered with the ORAM process, making the results unreliable. I secured a remote testing machine in order to run the experiments in complete isolation. Here, at first, they were running on an NFS mounted drive, meaning that network latency and protocol overheads were affecting the results. After moving the experiments to a local disk, it was clear that ORAM overheads were finally dominating the results.
+
+Secondly, I needed to initialise the ORAMs properly. When a fresh ORAM is created, the stash is empty and all of the blocks are dummy blocks that are disregarded. It is necessary to run an initialisation sequence to remove the effects that this has on the results. I used the worst case sequence, which writes every block in turn, then reads every block in turn, repeatedly. This ensures that all blocks are used multiple times, leaving the ORAM in a state that it would likely be in after extended use. The performance can only be reliably tested once this steady state has been reached.
+
+During the actual experiment, I used a random sequence of block accesses rather than the worst case sequence. I performed 10 runs of 1000 iterations each, hence, using 1MB blocks, each run transferred $\approx$1GB data. Accesses oscillated between reads and writes in order to balance the different overheads. To measure how the performance changes as the block size increases, I used ORAMs of a range of sizes, from 12 blocks (a tree of depth 1) to 4092 blocks (a tree of depth 9). The log of the time taken for each ORAM to perform 1000 iterations is plotted against the logarithm of the size of the ORAM in \cref{fig:timeResults}. I expected this to be a straight line, because I expected logarithmic overheads from ORAM, and I increased the block sizes approximately in powers of two. We can see that ORAM does indeed show a logarithmic overhead compared to the control experiment that performed the same sequence of accesses to a block device without ORAM. The block device with height 12 and block size 1MB has a total capacity of $\approx$4GB. ORAM took $\approx$10s to transfer $\approx$1GB of data, which is 8 seconds longer than the control device. This would seem to be a reasonable overhead to provide complete privacy of the access pattern.
+
+I performed the same experiment again, this time adding encryption to ORAM, which revealed that the overhead was still logarithmic, but with a larger constant. Encryption added on average 2 seconds to a data transfer of 1GB, an acceptable overhead when it underpins security.
 
 \begin{figure}
     \centering
@@ -1000,16 +1006,16 @@ For the actual experiment, rather than using the worst case sequence, we use a r
 
 %In these first experiments, we used stateless, non-recursive ORAM, which means that the entire of the position map was being flushed to disk on every access. We now compare the time taken for stateless, recursive ORAM, to see what effect the additional recursive calls have compared to the reduction in the size of the client side state. We can see from \cref{fig:recursiveTimePlot} that overall this was good/bad to some degree.
 
-Although it has not been discussed here, bandwidth is another important measure when examining the performance of ORAM, especially when it is being used in the cloud. With more time, a detailed study of the bandwidth used with and without recursion would have been carried out, which would have given further insight into the trade-off that recursion presents us with.
+Although it has not been discussed here, bandwidth is another important measure when examining the performance of ORAM, especially when it is being used in the cloud. With more time, a detailed study of the bandwidth used with and without recursion would have been carried out, which would have given insight into the trade-off that recursion presents us with.
 
 \section{Statistical Analysis}
 \label{sec:statisticalAnalysis}
 
-In order to test the effectiveness of ORAM, we need to show that the access pattern observed by the block device is actually statistically random. Of course there is structure to this randomness, because on each access a whole path is read and written, but the actual path that gets written should be random. Thus, we should perform a test for randomness on a sequence of path indices.
+To demonstrate the effectiveness of ORAM, it must be shown that the access pattern observed by the block device is statistically random. There is structure to this randomness, because on each access a whole path is read and written. For a tree of height $L$, $L+1$ accesses are made, each to a subrange that corresponds to a level of the tree. However, the actual path that is written should be random. Thus, a test for randomness should be performed on a sequence of path indices.
 
-In order to do this we will use two common techniques: autocorrelation plotting and runs testing.
+I used two techniques: autocorrelation plotting and runs testing.
 
-Autocorrelation plotting plots the correlation of a sequence with itself at various time lags \cite{nistautocorr}. For a random sequence the noise cancels itself out, so we want to see a plot of values very close to zero, apart from at lag 0, where the correlation will be exactly the power of the signal. I plotted this for two access patterns, one of length 200 so that the results would be easily visible, and one of length 5,000 to show longer term effects. For both of these patterns, the underlying access pattern, the one that would be seen without ORAM, was simply a succession of reads and writes to the same location. These plots are shown in \cref{fig:shortAutocorr} and \cref{fig:longAutocorr} respectively.
+Autocorrelation plotting plots the correlation of a sequence with itself at various time lags \cite{nistautocorr}. For a random sequence, the noise cancels itself out, resulting in a plot of values very close to zero. The exception is lag 0, where the correlation will be exactly the power of the signal. I plotted this for two access patterns: one of length 200, for which the results would be easily visible; and one of length 5,000, to show longer term effects. For both of these patterns, the underlying access pattern, which would be seen without ORAM, was simply a succession of reads and writes to the same location. These plots are shown in \cref{fig:shortAutocorr} and \cref{fig:longAutocorr} respectively.
 
 \begin{figure}
     \centering
@@ -1031,9 +1037,9 @@ Autocorrelation plotting plots the correlation of a sequence with itself at vari
     \label{fig:autocorr}
 \end{figure}
 
-The dashed black lines represent confidence bands of 95\% and 99\%, and in order to conclude that a sequence is random, we need almost all of the autocorrelation coefficients to lie within these bands. This is indeed the case, so ORAM has successfully taken a heavily non-random access pattern and turned it into a random one.
+The dashed black lines represent confidence bands of 95\% and 99\%. To conclude that a sequence is random, almost all of the autocorrelation coefficients should lie within these bands. This is indeed the case, so ORAM has successfully taken a heavily non-random access pattern and randomised it.
 
-Runs testing attempts to detect non-random beheviour in a signal by counting the number of runs, sequences of values that are all above or below the median value. Too few runs in a sequence suggests a trend and too many runs suggests cyclic behaviour. For a large sample, we can approximate the distribution of runs using a normally distributed random variable, and compare this with the distribution that we measure. To generate the distribution, we take 1000 sample access patterns, each of length 180. We cut each pattern into 18 equally sized segments of size 10, take the mean of each segment, and count the number of runs in the sequence of means. There can be between 2 and 18 runs in each sequence, but we would expect 90\% of the sequences to have between 7 and 14 runs, the 0.05\% tail cut-offs for this distribution \cite{masliah2000stationarity}. \Cref{fig:runsTestPlot} plots this distribution, along with the tail cut-offs, and 92.2\% of samples fall within the bounds. Thus, we can conclude that the samples were generated from a random process.
+Runs testing attempts to detect non-random behaviour in a signal by counting the number of runs, which are sequences of values that are all above or below the median value. Too few runs in a sequence suggests a trend, whereas too many runs suggests cyclic behaviour. For a large sample, the distribution of runs can be approximated using a normally-distributed random variable, and compared with the distribution that is measured. To generate the distribution, I took 1000 sample access patterns, each of length 180. I cut each pattern into 18 equally sized segments of size 10, took the mean of each segment, and counted the number of runs in the sequence of means. There can be between 2 and 18 runs in each sequence, but, for a random sequence, at least 90\% of the sequences should have between 7 and 14 runs. 7 and 14 are the 0.05\% tail cut-offs for this distribution \cite{masliah2000stationarity}. \Cref{fig:runsTestPlot} plots this distribution, along with the tail cut-offs, and 92.2\% of samples fall within the bounds. Thus, I can conclude that the samples were generated from a random process.
 
 \begin{figure}
     \centering
@@ -1047,19 +1053,22 @@ Runs testing attempts to detect non-random beheviour in a signal by counting the
 
 \section{Results}
 
-I successfully implemented the Path ORAM protocol and showed that my implementation agreed with the theoretical overhead of $O(\log N)$ and that it is a statistically secure implementation. I extended this with statelessness and recursion, which made it possible to disconnect from and reconnect to ORAM, which was invaluable during the evaluation. I built a functioning file system and a search module on top of this, which completed the end-to-end system that was the aim of the project.
+I successfully implemented the Path ORAM protocol and demonstrated that my implementation agrees with the theoretical overhead of $O(\log N)$, and that it is a statistically secure implementation. Statelessness and recursion were extensions to the project which made it possible to disconnect from and reconnect to ORAM, which proved invaluable during the evaluation process. I built a functioning file system and a search module on top of this, which completed the end-to-end system that was the aim of the project.
 
-\section{Lessons Learnt}
+Furthermore, the impact of ORAM on a real-world storage scenario was demonstrated. Using a 4GB ORAM block device, the transfer of 1GB of data took 10s, compared to 2s on the block device alone. Although this represents a decrease in transfer rate of a factor of four, it seems to be a reasonable overhead to ensure the privacy of important data.
 
-This project has taught me many important lessons. The one that has had the most impact is time management. I got stuck into the project straight away and did as much work on it as I could during the Michaelmas term and vacation, which meant that hiccoughs later down the line had a large buffer and didn't cause severe consequences. Related to this I learnt that predicting the time that each part of a project will take is very difficult and it is therefore important to be both conservative and realistic about the number of things that will go wrong. I learnt the importance of sharing your work with others through contribution to the Mirage community and being invited to talk about the project at Microsoft Research Cambridge. I would like to thank Markulf Kohlweiss from Microsoft Research for giving his advice on the project and giving me the opportunity to present my findings. Finally, I learnt that you should seek advice as soon as there are signs of trouble, rather than waiting for a scheduled meeting to bring something up. The advice of experienced supervisors can turn the seemingly catastrophic into a minor disruption.
 
 \section{Future Work}
 
-There is still much work to be done in the field of ORAM. One of the main drawbacks of current schemes is that the size of the ORAM must be determined in advance and the overhead associated with expanding it is enormous. I would like to investigate the possibility of creating a resizable version of my implementation, however this was unfortunately not in the scope of this project.
+There is much work to be done in the field of ORAM. One of the main drawbacks of current schemes is that the size of the ORAM must be determined in advance, and the overhead associated with expanding it is enormous. I would like to investigate the possibility of creating a resizeable version of my implementation.
 
-There are also many optimisations to be performed on this implementation. Along with many interesting optimisations mentioned in the literature, there is plenty of room for analysis and optimisation of this specific implementation using benchmarking to identify code hot-spots.
+There are also optimisations that could be performed on this implementation. Along with the interesting optimisations mentioned in the literature, I can see room for analysis and optimisation of this specific implementation using benchmarking to identify code hot-spots.
 
-I would also like to perform further analysis to get a deeper understanding of this implementation. I would like to perform further experiments on the initialisation stage of ORAM to understand how the size of the stash changes during this period. I would also like to spend more time adjusting various parameters, including block size and bucket size, attempting to find an optimal set of values for them.
+I would like to perform further analysis to gain a deeper understanding of this implementation. I would like to perform more experiments on the initialisation stage of ORAM to understand how the size of the stash changes during this period. Moreover, I would like to spend time adjusting various parameters, including block size and bucket size, in an attempt to find an optimal set of values.
+
+\section{Lessons Learnt}
+
+This project has taught me many important lessons. Perhaps the most significant of these is time management. Throwing myself into the project during the Michaelmas term and vacation meant that I gave myself a large buffer to ensure any hiccoughs later on did not have severe consequences. Related to this, I learnt that predicting the time that each part of a project will take is very difficult and it is therefore important to be both conservative and realistic about the number of things that might go wrong. I learnt the importance and pleasure of sharing one's work with others through contributing to the Mirage community and being invited to talk about the project at Microsoft Research Cambridge. I would like to thank Markulf Kohlweiss from Microsoft Research for his advice and for giving me the opportunity to present my findings. Finally, I have learnt that it is far better to seek advice at the first sign of trouble, rather than waiting until the next scheduled meeting. The advice of experienced supervisors can turn the seemingly catastrophic into a minor disruption.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % the bibliography
