@@ -1,0 +1,620 @@
+\documentclass{beamer}
+
+\usecolortheme{beaver}
+\beamertemplatenavigationsymbolsempty
+\let\Tiny=\tiny
+\hypersetup{pdfstartview={Fit}}
+\setbeamertemplate{footline}[frame number]
+
+\AtBeginSection[]
+{
+  \begin{frame}
+      \frametitle{Overview}
+      \tableofcontents[currentsection]
+    \end{frame}
+}
+
+%\usepackage{enumitem}
+%\setlist[1]{itemsep=1em}
+%\setitemize{label=\usebeamerfont*{itemize item}%
+%  \usebeamercolor[fg]{itemize item}
+%  \usebeamertemplate{itemize item}}
+
+\usepackage{etoolbox}% http://ctan.org/pkg/etoolbox
+
+\makeatletter
+\patchcmd{\@listI}{\itemsep3\p@}{\itemsep1.5em}{}{}
+\makeatother
+
+\usepackage{tikz}
+\usetikzlibrary{trees,decorations.pathreplacing,shapes.multipart,calc}
+\usepackage{gnuplot-lua-tikz}
+\tikzstyle{bucket} = [draw=blue!50,fill=blue!20,rectangle split,rectangle split parts=4,minimum width=30mm]
+\usepackage{caption}
+\usepackage{subcaption}
+
+\title{Encrypted Keyword Search Using \\ Path ORAM on MirageOS}
+\author{Rupert Horlick -- rh572@cam.ac.uk}
+
+\begin{document}
+
+\addtocounter{framenumber}{-1}
+\frame[plain]{\titlepage}
+
+\begin{frame}
+    \frametitle{Introduction}
+    \begin{itemize}
+        \item Final year undergraduate Computer Science student
+        \item Undertook project over 9 months
+        \item Implemented Path ORAM protocol, along with a file system and search module
+        \item Wrote 10,000 word dissertation on the whole process
+    \end{itemize}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Overview}
+    \tableofcontents
+\end{frame}
+
+\section{Motivation}
+
+\begin{frame}
+    \frametitle{Motivation}
+    \begin{itemize}
+        \item Cloud storage's popularity demands a stronger emphasis on privacy
+        \item Encryption hides data from cloud storage providers
+            \begin{itemize}
+                \item But hinders the ability to search
+            \end{itemize}
+        \item Homomorphic encryption makes encrypted search possible
+            \begin{itemize}
+                \item But can leak up to 80\% of queries!
+            \end{itemize}
+        \item Can we have the best of both worlds?
+    \end{itemize}
+\end{frame}
+
+\section{Solution}
+
+\begin{frame}
+    \frametitle{Oblivious Random Access Memory (ORAM)}
+    \begin{itemize}
+        \item A cryptographic protocol for obfuscating access patterns
+            \begin{itemize}
+                \item Trusted client and untrusted storage server
+                \item Relies on cryptographically secure shuffling of data
+            \end{itemize}
+        \item Originally applied to software protection
+            \begin{itemize}
+                \item Repurposed for secure processors and cloud computing
+            \end{itemize}
+        \item Original schemes had unacceptable overheads
+            \begin{itemize}
+                \item Recent improvements have made ORAM more feasible
+            \end{itemize}
+    \end{itemize}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Path ORAM}
+    \begin{itemize}
+        \item Recent ORAM scheme (2013)
+        \item Maintains three data structures
+            \begin{itemize}
+                \item Binary tree on server
+                    \begin{itemize}
+                        \item Each node is a bucket that contains up to $Z$ blocks
+                        \item Initially all blocks are dummy blocks
+                    \end{itemize}
+                \item Stash on client
+                    \begin{itemize}
+                        \item Working memory for blocks read from the tree
+                        \item Initially empty
+                    \end{itemize}
+                \item Position map on client
+                    \begin{itemize}
+                        \item Associates to each block of data a leaf in the tree
+                        \item Initially contains uniformly random values
+                    \end{itemize}
+            \end{itemize}
+
+    \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+    \frametitle{Path ORAM Initial Overview}
+    \begin{center}
+        \scalebox{0.5}{\begin{tikzpicture}[level/.style={level distance=30mm,sibling distance=75mm/#1},
+            level 3/.style={sibling distance=18mm},
+            edge from parent/.style={draw,-latex}]
+            \node[bucket,grow=down] (n0) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+            child {
+              node[bucket] {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+              child { node[bucket] (n3) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+              child { node[bucket] (n4) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+            }
+            child {
+              node[bucket] {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+              child { node[bucket] (n5) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+              child { node[bucket] (n6) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+            };
+            \node at ($(n3) - (0,17mm)$) {0};
+            \node at ($(n4) - (0,17mm)$) {1};
+            \node at ($(n5) - (0,17mm)$) {2};
+            \node at ($(n6) - (0,17mm)$) {3};
+            \node[bucket] at ($(n0) + (-30mm,40mm)$) [label=above:Stash] {};
+            \node[bucket] at ($(n0) + (30mm,40mm)$) [label=above:Position Map] {$0 \mapsto 3$ \nodepart{two} $1 \mapsto 2$ \nodepart{three} $2 \mapsto 0$ \nodepart{four} $\vdots$};
+        \end{tikzpicture}}
+    \end{center}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Access Algorithm}
+    \begin{itemize}
+        \item Take in parameters $a$, the address, $op$, the operation, and $data^\ast$, the new data for a write
+        \item Then have the following steps:
+            \begin{itemize}
+                \item Lookup position of $a$ in position map, $x$
+                \item Remap $a$ to a random position
+                \item Read the $x$-th path into the stash
+                \item If $op$ is write, then overwrite data for $a$ with $data^\ast$ in the stash
+                \item Write blocks from the stash back into $x$-th path
+                \item If $op$ is a read, then return data
+            \end{itemize}
+    \end{itemize}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Path ORAM Input}
+    \begin{center}
+        \begin{tikzpicture}
+            \node[bucket,node distance=40mm] (before) {``Zero'' \nodepart{two} ``One'' \nodepart{three} ``Two'' \nodepart{four} ``Three''};
+            \node[bucket,node distance=40mm] (after) [right of=before] {(0,``Zero'') \nodepart{two} (1,``One'') \nodepart{three} (2,``Two'') \nodepart{four} (3,``Three'')};
+            \draw[->] (before) edge (after);
+        \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+\begin{frame}[fragile]
+    \frametitle{Example Write: Lookup Position}
+    \begin{center}
+        \scalebox{0.5}{\begin{tikzpicture}[level/.style={level distance=30mm,sibling distance=75mm/#1},
+            level 3/.style={sibling distance=18mm},
+            edge from parent/.style={draw,-latex}]
+            \node[bucket,grow=down] (n0) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+            child {
+              node[bucket] {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+              child { node[bucket] (n3) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+              child { node[bucket] (n4) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+            }
+            child {
+              node[bucket] {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+              child { node[bucket] (n5) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+              child { node[bucket] (n6) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+            };
+            \node at ($(n3) - (0,17mm)$) {0};
+            \node at ($(n4) - (0,17mm)$) {1};
+            \node at ($(n5) - (0,17mm)$) {2};
+            \node at ($(n6) - (0,17mm)$) {3};
+            \node[bucket] at ($(n0) + (-30mm,40mm)$) [label=above:Stash] {};
+            \node[bucket] at ($(n0) + (30mm,40mm)$) [label=above:Position Map] {$0 \mapsto 3$ \nodepart{two} $1 \mapsto 2$ \nodepart{three} $2 \mapsto 0$ \nodepart{four} $\vdots$};
+        \end{tikzpicture}}
+    \end{center}
+\end{frame}
+
+\begin{frame}[fragile]
+    \frametitle{Example Write: Remap Block}
+    \begin{center}
+        \scalebox{0.5}{\begin{tikzpicture}[level/.style={level distance=30mm,sibling distance=75mm/#1},
+            level 3/.style={sibling distance=18mm},
+            edge from parent/.style={draw,-latex}]
+            \node[bucket,grow=down] (n0) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+            child {
+              node[bucket] {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+              child { node[bucket] (n3) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+              child { node[bucket] (n4) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+            }
+            child {
+              node[bucket] {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+              child { node[bucket] (n5) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+              child { node[bucket] (n6) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+            };
+            \node at ($(n3) - (0,17mm)$) {0};
+            \node at ($(n4) - (0,17mm)$) {1};
+            \node at ($(n5) - (0,17mm)$) {2};
+            \node at ($(n6) - (0,17mm)$) {3};
+            \node[bucket] at ($(n0) + (-30mm,40mm)$) [label=above:Stash] {};
+            \node[bucket] at ($(n0) + (30mm,40mm)$) [label=above:Position Map] {$0 \mapsto 1$ \nodepart{two} $1 \mapsto 2$ \nodepart{three} $2 \mapsto 0$ \nodepart{four} $\vdots$};
+        \end{tikzpicture}}
+    \end{center}
+\end{frame}
+
+\begin{frame}[fragile]
+    \frametitle{Example Write: Read Path}
+    \begin{center}
+        \scalebox{0.5}{\begin{tikzpicture}[level/.style={level distance=30mm,sibling distance=75mm/#1},
+            level 3/.style={sibling distance=18mm},
+            edge from parent/.style={draw,-latex}]
+            \node[bucket,grow=down] (n0) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+            child {
+              node[bucket] {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+              child { node[bucket] (n3) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+              child { node[bucket] (n4) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+            }
+            child {
+              node[bucket] {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+              child { node[bucket] (n5) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+              child { node[bucket] (n6) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+            };
+            \node at ($(n3) - (0,17mm)$) {0};
+            \node at ($(n4) - (0,17mm)$) {1};
+            \node at ($(n5) - (0,17mm)$) {2};
+            \node at ($(n6) - (0,17mm)$) {3};
+            \node[bucket] at ($(n0) + (-30mm,40mm)$) [label=above:Stash] {};
+            \node[bucket] at ($(n0) + (30mm,40mm)$) [label=above:Position Map] {$0 \mapsto 1$ \nodepart{two} $1 \mapsto 2$ \nodepart{three} $2 \mapsto 0$ \nodepart{four} $\vdots$};
+        \end{tikzpicture}}
+    \end{center}
+\end{frame}
+
+\begin{frame}[fragile]
+    \frametitle{Example Write: Write Data}
+    \begin{center}
+        \scalebox{0.5}{\begin{tikzpicture}[level/.style={level distance=30mm,sibling distance=75mm/#1},
+            level 3/.style={sibling distance=18mm},
+            edge from parent/.style={draw,-latex}]
+            \node[bucket,grow=down] (n0) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+            child {
+              node[bucket] {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+              child { node[bucket] (n3) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+              child { node[bucket] (n4) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+            }
+            child {
+              node[bucket] {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+              child { node[bucket] (n5) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+              child { node[bucket] (n6) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+            };
+            \node at ($(n3) - (0,17mm)$) {0};
+            \node at ($(n4) - (0,17mm)$) {1};
+            \node at ($(n5) - (0,17mm)$) {2};
+            \node at ($(n6) - (0,17mm)$) {3};
+            \node[bucket] at ($(n0) + (-30mm,40mm)$) [label=above:Stash] {(0,``Zero'')};
+            \node[bucket] at ($(n0) + (30mm,40mm)$) [label=above:Position Map] {$0 \mapsto 1$ \nodepart{two} $1 \mapsto 2$ \nodepart{three} $2 \mapsto 0$ \nodepart{four} $\vdots$};
+        \end{tikzpicture}}
+    \end{center}
+\end{frame}
+
+\begin{frame}[fragile]
+    \frametitle{Example Write: Write Path}
+    \begin{center}
+        \scalebox{0.5}{\begin{tikzpicture}[level/.style={level distance=30mm,sibling distance=75mm/#1},
+            level 3/.style={sibling distance=18mm},
+            edge from parent/.style={draw,-latex}]
+            \node[bucket,grow=down] (n0) {(0,``Zero'') \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+            child {
+              node[bucket] {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+              child { node[bucket] (n3) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+              child { node[bucket] (n4) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+            }
+            child {
+              node[bucket] {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+              child { node[bucket] (n5) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+              child { node[bucket] (n6) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+            };
+            \node at ($(n3) - (0,17mm)$) {0};
+            \node at ($(n4) - (0,17mm)$) {1};
+            \node at ($(n5) - (0,17mm)$) {2};
+            \node at ($(n6) - (0,17mm)$) {3};
+            \node[bucket] at ($(n0) + (-30mm,40mm)$) [label=above:Stash] {};
+            \node[bucket] at ($(n0) + (30mm,40mm)$) [label=above:Position Map] {$0 \mapsto 1$ \nodepart{two} $1 \mapsto 2$ \nodepart{three} $2 \mapsto 0$ \nodepart{four} $\vdots$};
+        \end{tikzpicture}}
+    \end{center}
+\end{frame}
+
+\begin{frame}[fragile]
+    \frametitle{Example Write: Lookup Position}
+    \begin{center}
+        \scalebox{0.5}{\begin{tikzpicture}[level/.style={level distance=30mm,sibling distance=75mm/#1},
+            level 3/.style={sibling distance=18mm},
+            edge from parent/.style={draw,-latex}]
+            \node[bucket,grow=down] (n0) {(0,``Zero'') \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+            child {
+              node[bucket] {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+              child { node[bucket] (n3) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+              child { node[bucket] (n4) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+            }
+            child {
+              node[bucket] {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+              child { node[bucket] (n5) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+              child { node[bucket] (n6) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+            };
+            \node at ($(n3) - (0,17mm)$) {0};
+            \node at ($(n4) - (0,17mm)$) {1};
+            \node at ($(n5) - (0,17mm)$) {2};
+            \node at ($(n6) - (0,17mm)$) {3};
+            \node[bucket] at ($(n0) + (-30mm,40mm)$) [label=above:Stash] {};
+            \node[bucket] at ($(n0) + (30mm,40mm)$) [label=above:Position Map] {$0 \mapsto 1$ \nodepart{two} $1 \mapsto 2$ \nodepart{three} $2 \mapsto 0$ \nodepart{four} $\vdots$};
+        \end{tikzpicture}}
+    \end{center}
+\end{frame}
+
+\begin{frame}[fragile]
+    \frametitle{Example Write: Remap Block}
+    \begin{center}
+        \scalebox{0.5}{\begin{tikzpicture}[level/.style={level distance=30mm,sibling distance=75mm/#1},
+            level 3/.style={sibling distance=18mm},
+            edge from parent/.style={draw,-latex}]
+            \node[bucket,grow=down] (n0) {(0,``Zero'') \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+            child {
+              node[bucket] {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+              child { node[bucket] (n3) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+              child { node[bucket] (n4) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+            }
+            child {
+              node[bucket] {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+              child { node[bucket] (n5) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+              child { node[bucket] (n6) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+            };
+            \node at ($(n3) - (0,17mm)$) {0};
+            \node at ($(n4) - (0,17mm)$) {1};
+            \node at ($(n5) - (0,17mm)$) {2};
+            \node at ($(n6) - (0,17mm)$) {3};
+            \node[bucket] at ($(n0) + (-30mm,40mm)$) [label=above:Stash] {};
+            \node[bucket] at ($(n0) + (30mm,40mm)$) [label=above:Position Map] {$0 \mapsto 1$ \nodepart{two} $1 \mapsto 3$ \nodepart{three} $2 \mapsto 0$ \nodepart{four} $\vdots$};
+        \end{tikzpicture}}
+    \end{center}
+\end{frame}
+
+\begin{frame}[fragile]
+    \frametitle{Example Write: Read Path}
+    \begin{center}
+        \scalebox{0.5}{\begin{tikzpicture}[level/.style={level distance=30mm,sibling distance=75mm/#1},
+            level 3/.style={sibling distance=18mm},
+            edge from parent/.style={draw,-latex}]
+            \node[bucket,grow=down] (n0) {(0,``Zero'') \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+            child {
+              node[bucket] {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+              child { node[bucket] (n3) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+              child { node[bucket] (n4) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+            }
+            child {
+              node[bucket] {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+              child { node[bucket] (n5) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+              child { node[bucket] (n6) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+            };
+            \node at ($(n3) - (0,17mm)$) {0};
+            \node at ($(n4) - (0,17mm)$) {1};
+            \node at ($(n5) - (0,17mm)$) {2};
+            \node at ($(n6) - (0,17mm)$) {3};
+            \node[bucket] at ($(n0) + (-30mm,40mm)$) [label=above:Stash] {(0,``Zero'')};
+            \node[bucket] at ($(n0) + (30mm,40mm)$) [label=above:Position Map] {$0 \mapsto 1$ \nodepart{two} $1 \mapsto 3$ \nodepart{three} $2 \mapsto 0$ \nodepart{four} $\vdots$};
+        \end{tikzpicture}}
+    \end{center}
+\end{frame}
+
+\begin{frame}[fragile]
+    \frametitle{Example Write: Write Data}
+    \begin{center}
+        \scalebox{0.5}{\begin{tikzpicture}[level/.style={level distance=30mm,sibling distance=75mm/#1},
+            level 3/.style={sibling distance=18mm},
+            edge from parent/.style={draw,-latex}]
+            \node[bucket,grow=down] (n0) {(0,``Zero'') \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+            child {
+              node[bucket] {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+              child { node[bucket] (n3) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+              child { node[bucket] (n4) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+            }
+            child {
+              node[bucket] {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+              child { node[bucket] (n5) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+              child { node[bucket] (n6) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+            };
+            \node at ($(n3) - (0,17mm)$) {0};
+            \node at ($(n4) - (0,17mm)$) {1};
+            \node at ($(n5) - (0,17mm)$) {2};
+            \node at ($(n6) - (0,17mm)$) {3};
+            \node[bucket] at ($(n0) + (-30mm,40mm)$) [label=above:Stash] {(0,``Zero'') \nodepart{two} (1,``One'')};
+            \node[bucket] at ($(n0) + (30mm,40mm)$) [label=above:Position Map] {$0 \mapsto 1$ \nodepart{two} $1 \mapsto 3$ \nodepart{three} $2 \mapsto 0$ \nodepart{four} $\vdots$};
+        \end{tikzpicture}}
+    \end{center}
+\end{frame}
+
+\begin{frame}[fragile]
+    \frametitle{Example Write: Write Path}
+    \begin{center}
+        \scalebox{0.5}{\begin{tikzpicture}[level/.style={level distance=30mm,sibling distance=75mm/#1},
+            level 3/.style={sibling distance=18mm},
+            edge from parent/.style={draw,-latex}]
+            \node[bucket,grow=down] (n0) {(0,``Zero'') \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+            child {
+              node[bucket] {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+              child { node[bucket] (n3) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+              child { node[bucket] (n4) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+            }
+            child {
+              node[bucket] {(1,``One'') \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+              child { node[bucket] (n5) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+              child { node[bucket] (n6) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+            };
+            \node at ($(n3) - (0,17mm)$) {0};
+            \node at ($(n4) - (0,17mm)$) {1};
+            \node at ($(n5) - (0,17mm)$) {2};
+            \node at ($(n6) - (0,17mm)$) {3};
+            \node[bucket] at ($(n0) + (-30mm,40mm)$) [label=above:Stash] {};
+            \node[bucket] at ($(n0) + (30mm,40mm)$) [label=above:Position Map] {$0 \mapsto 1$ \nodepart{two} $1 \mapsto 3$ \nodepart{three} $2 \mapsto 0$ \nodepart{four} $\vdots$};
+        \end{tikzpicture}}
+    \end{center}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Introduction to MirageOS}
+    \begin{itemize}
+        \item Library operating system, consisting of a command line tool and a set of libraries
+        \item Compiles applications to a unikernel, a lightweight operating system
+        \item Can be compiled for a number of targets including Xen and Unix
+        \item Gives us control over where the ORAM application is deployed
+        \item Allows a lightweight cloud instance to be spun up on demand
+    \end{itemize}
+\end{frame}
+
+\section{Implementation}
+
+\begin{frame}
+    \frametitle{System Architecture}
+\begin{figure}
+    \centering
+    \scalebox{0.7}{
+    \tikzstyle{principal}=[draw,node distance=50mm,minimum width=30mm,minimum height=25mm,text width=20mm,text centered]
+    \begin{tikzpicture}
+        \node[principal] (user) {User};
+        \node[principal,right of=user] (ci) {Cloud Instance};
+        \node[principal,right of=ci] (csp) {Cloud Storage Provider};
+        \draw[<->] (user) -- (ci);
+        \draw[<->] (ci) -- (csp);
+        \draw[decorate,decoration={brace,mirror,raise=4pt}] (ci.south west) -- (csp.south east) node[midway,below,yshift=-4mm] {Path ORAM Protocol};
+    \end{tikzpicture}}
+    \caption{ORAM can be built as a MirageOS application, which can run on a trusted cloud instance.}
+    \label{fig:cloudInstance}
+\end{figure}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Implementation of Basic ORAM}
+    \begin{itemize}
+        \item Built Path ORAM as a functor satisfying Mirage's \texttt{BLOCK} interface
+        \item A functor is a module parameterised over the implementation of another module
+        \item This allows the underlying implementation of the storage device to be abstracted away
+        \item The stash was built as a hash table
+        \item The position map was built as a 3-dimensional array to allow 64-bit addresses
+    \end{itemize}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Recursive ORAM}
+    \begin{itemize}
+        \item Do be able to disconnect from ORAM we need it to be stateless
+        \item Writing the entire position map to disk is expensive
+        \item Recursive ORAM stores the position map of the first ORAM in another ORAM
+        \item This position map ORAM will have a smaller position map, because multiple addresses fit in one data block
+        \item This process can be repeated until we have a constant sized position map
+        \item Implemented this using recursive functors, parameterised in the position map
+    \end{itemize}
+\end{frame}
+
+\begin{frame}
+    \frametitle{The Rest}
+    \begin{itemize}
+        \item On top of ORAM I built an inode-based file system
+        \item This included an implementation of B-Trees to store the inode index
+        \item On top of the file system I built a simple search module
+        \item This consists of an inverted index built on a hash table of hash sets
+        \item I incorporated an exisiting encryption library, also built as a functor
+    \end{itemize}
+\end{frame}
+
+\section{Evaluation}
+
+\begin{frame}
+    \frametitle{Parameter Optimisation}
+    \begin{itemize}
+        \item ORAM has a number of parameters that can be adjusted
+        \item These include the size of blocks and the number of blocks in a bucket
+        \item I focused on block size, because this has been shown to dramatically affect the speed of IO operations
+        \item The results showed this to be true, but there is a trade off to be made
+        \item A large block size means a larger stash, so a larger overhead for statelessness
+    \end{itemize}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Block Size Results}
+    \begin{figure}
+    \centering
+    \scalebox{0.6}{\input{../blockSize.tex}}
+    \caption{Plot of the time taken to transfer 80MB of data at varying block sizes and sizes of ORAM. Each line represents one ORAM size, $N$, so as block size increases, the time decreases.}
+    \label{fig:blockSizeResults}
+    \end{figure}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Performance Evaluation}
+    \begin{itemize}
+        \item In the Path ORAM paper, they report a theoretical overhead of $O(\log N)$
+        \item $N$ here is the size of the ORAM in blocks
+        \item I performed 10 runs of 1000 iterations, for a total of $\approx$ 1GB per run
+        \item I used ORAMs from size 12 (tree of depth 1) to 4092 (depth 9)
+        \item The results showed a roughly logarithmic overhead, compared to the control
+        \item Encryption added a further constant overhead
+    \end{itemize}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Performance Results}
+    \begin{figure}
+    \centering
+    \scalebox{0.5}{\input{../timeResults.tex}}
+    \caption{The relationship between size of an ORAM in blocks and the time taken for 1000 operations, plotted for ORAM, encrypted ORAM, and a control block device with no ORAM. We take logs of both axes, because block size was increased in powers of two and we expect a log relationship.}
+    \label{fig:timeResults}
+    \end{figure}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Security Evaluation}
+    \begin{itemize}
+        \item Used statistical techniques to show that the observed access pattern is random
+        \item The first technique is autocorrelation plotting
+        \item This takes the correlation of a sequence with itself plotted for a number of lags
+        \item For a random sequence, noise should cancel out to give values close to zero
+        \item The second technique is runs testing
+        \item This counts the number of runs of consecutive values all above or below the median
+        \item We compare this number to that of a random process
+    \end{itemize}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Autocorrelation Results}
+    \begin{figure}
+        \centering
+        \begin{subfigure}{0.5\textwidth}
+            \centering
+            \scalebox{0.4}{\input{../shortAutocorr.tex}}
+            \caption{Autocorrelation plot of a 200 iteration access pattern}
+            \label{fig:shortAutocorr}
+        \end{subfigure}%
+        \begin{subfigure}{0.5\textwidth}
+            \centering
+            \scalebox{0.4}{\input{../longAutocorr.tex}}
+            \caption{Autocorrelation plot of a 5,000 iteration access pattern}
+            \label{fig:longAutocorr}
+        \end{subfigure}
+        \caption{Two autocorrelation plots, with the autocorrelation coefficient on the y-axis and time lag on the x-axis. The dashed black lines represent confidence bands of 95\% and 99\%. For a random sequence, most of the points should fall within the 95\% confidence bound, as they do on both of these plots.}
+        \label{fig:autocorr}
+    \end{figure}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Runs Test Results}
+    \begin{figure}
+        \centering
+        \scalebox{0.5}{\input{../runs.tex}}
+        \caption{The distribution of the number of runs in 1000 access patterns of length 180. The dashed black lines represent 0.05\% tail cut-offs. 92.2\% of values fall within these bounds, implying that the access patterns were created from a random process.}
+        \label{fig:runsTestPlot}
+    \end{figure}
+\end{frame}
+
+\section{Summary}
+
+\begin{frame}
+    \frametitle{Further Work}
+    \begin{itemize}
+        \item Further exploration of the parameter space
+        \item Examination of alternative performance measures including bandwidth overheads
+        \item Deployment to the cloud and testing of overheads in real scenario
+    \end{itemize}
+\end{frame}
+
+\begin{frame}[plain]
+    \begin{center}
+        \huge Thank you \\ Questions?
+    \end{center}
+\end{frame}
+
+\end{document}

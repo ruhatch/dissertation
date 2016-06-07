@@ -1,0 +1,24 @@
+\frametitle{Example Write: Write Path}
+    \begin{center}
+        \scalebox{0.5}{\begin{tikzpicture}[level/.style={level distance=30mm,sibling distance=75mm/#1},
+            level 3/.style={sibling distance=18mm},
+            edge from parent/.style={draw,-latex}]
+            \node[bucket,grow=down] (n0) {(0,``Zero'') \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+            child {
+              node[bucket] {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+              child { node[bucket] (n3) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+              child { node[bucket] (n4) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+            }
+            child {
+              node[bucket] {(1,``One'') \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy}
+              child { node[bucket] (n5) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+              child { node[bucket] (n6) {Dummy \nodepart{two} Dummy \nodepart{three} Dummy \nodepart{four} Dummy} }
+            };
+            \node at ($(n3) - (0,17mm)$) {0};
+            \node at ($(n4) - (0,17mm)$) {1};
+            \node at ($(n5) - (0,17mm)$) {2};
+            \node at ($(n6) - (0,17mm)$) {3};
+            \node[bucket] at ($(n0) + (-30mm,40mm)$) [label=above:Stash] {};
+            \node[bucket] at ($(n0) + (30mm,40mm)$) [label=above:Position Map] {$0 \mapsto 1$ \nodepart{two} $1 \mapsto 3$ \nodepart{three} $2 \mapsto 0$ \nodepart{four} $\vdots$};
+        \end{tikzpicture}}
+    \end{center}
