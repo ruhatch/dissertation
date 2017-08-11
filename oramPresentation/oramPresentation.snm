@@ -1,9 +1,8 @@
-\beamer@slide {fig:cloudInstance}{24}
-\beamer@slide {fig:blockSizeResults}{30}
-\beamer@slide {fig:timeResults}{32}
-\beamer@slide {fig:shortAutocorr}{34}
-\beamer@slide {sub@fig:shortAutocorr}{34}
-\beamer@slide {fig:longAutocorr}{34}
-\beamer@slide {sub@fig:longAutocorr}{34}
-\beamer@slide {fig:autocorr}{34}
-\beamer@slide {fig:runsTestPlot}{35}
+\beamer@slide {fig:blockSizeResults}{35}
+\beamer@slide {fig:timeResults}{36}
+\beamer@slide {fig:shortAutocorr}{38}
+\beamer@slide {sub@fig:shortAutocorr}{38}
+\beamer@slide {fig:longAutocorr}{38}
+\beamer@slide {sub@fig:longAutocorr}{38}
+\beamer@slide {fig:autocorr}{38}
+\beamer@slide {fig:runsTestPlot}{39}

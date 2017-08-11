@@ -47,6 +47,7 @@
         \item Final year undergraduate Computer Science student
         \item Undertook project over 9 months
         \item Implemented Path ORAM protocol, along with a file system and search module
+        \item Evaluated performance and security properties
         \item Wrote 10,000 word dissertation on the whole process
     \end{itemize}
 \end{frame}
@@ -68,7 +69,7 @@
             \end{itemize}
         \item Homomorphic encryption makes encrypted search possible
             \begin{itemize}
-                \item But can leak up to 80\% of queries!
+                \item But can leak up to 80\% of queries! [Islam et al.]
             \end{itemize}
         \item Can we have the best of both worlds?
     \end{itemize}
@@ -151,15 +152,15 @@
 \begin{frame}
     \frametitle{Access Algorithm}
     \begin{itemize}
-        \item Take in parameters $a$, the address, $op$, the operation, and $data^\ast$, the new data for a write
+        \item Signature: $\mathtt{access(a,op,data^\ast)}$
         \item Then have the following steps:
             \begin{itemize}
-                \item Lookup position of $a$ in position map, $x$
-                \item Remap $a$ to a random position
+                \item Lookup position of $\mathtt{a}$ in position map, $x$
+                \item Remap $\mathtt{a}$ to a random position
                 \item Read the $x$-th path into the stash
-                \item If $op$ is write, then overwrite data for $a$ with $data^\ast$ in the stash
+                \item If $\mathtt{op}$ is write, then overwrite data for $\mathtt{a}$ with $\mathtt{data^\ast}$ in the stash
                 \item Write blocks from the stash back into $x$-th path
-                \item If $op$ is a read, then return data
+                \item If $\mathtt{op}$ is a read, then return data
             \end{itemize}
     \end{itemize}
 \end{frame}
@@ -167,11 +168,18 @@
 \begin{frame}
     \frametitle{Path ORAM Input}
     \begin{center}
-        \begin{tikzpicture}
+        \begin{tikzpicture}[>=stealth']
             \node[bucket,node distance=40mm] (before) {``Zero'' \nodepart{two} ``One'' \nodepart{three} ``Two'' \nodepart{four} ``Three''};
             \node[bucket,node distance=40mm] (after) [right of=before] {(0,``Zero'') \nodepart{two} (1,``One'') \nodepart{three} (2,``Two'') \nodepart{four} (3,``Three'')};
             \draw[->] (before) edge (after);
         \end{tikzpicture}
+    \end{center}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Worked Example}
+    \begin{center}
+        \texttt{access(0,write,``Zero'')}
     \end{center}
 \end{frame}
 
@@ -307,6 +315,13 @@
             \node[bucket] at ($(n0) + (-30mm,40mm)$) [label=above:Stash] {};
             \node[bucket] at ($(n0) + (30mm,40mm)$) [label=above:Position Map] {$0 \mapsto 1$ \nodepart{two} $1 \mapsto 2$ \nodepart{three} $2 \mapsto 0$ \nodepart{four} $\vdots$};
         \end{tikzpicture}}
+    \end{center}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Worked Example}
+    \begin{center}
+        \texttt{access(1,write,``One'')}
     \end{center}
 \end{frame}
 
@@ -446,83 +461,353 @@
 \end{frame}
 
 \begin{frame}
-    \frametitle{Introduction to MirageOS}
-    \begin{itemize}
-        \item Library operating system, consisting of a command line tool and a set of libraries
-        \item Compiles applications to a unikernel, a lightweight operating system
-        \item Can be compiled for a number of targets including Xen and Unix
-        \item Gives us control over where the ORAM application is deployed
-        \item Allows a lightweight cloud instance to be spun up on demand
-    \end{itemize}
+    \frametitle{MirageOS}
+    \begin{center}
+        \scalebox{0.5}{\includegraphics{mirage}}
+    \end{center}
+    %\begin{itemize}
+    %    \item Library operating system, consisting of a command line tool and a set of libraries
+    %    \item Compiles applications to a unikernel, a lightweight operating system
+    %    \item Can be compiled for a number of targets including Xen and Unix
+    %    \item Gives us control over where the ORAM application is deployed
+    %    \item Allows a lightweight cloud instance to be spun up on demand
+    %\end{itemize}
 \end{frame}
 
 \section{Implementation}
 
 \begin{frame}
-    \frametitle{System Architecture}
-\begin{figure}
-    \centering
-    \scalebox{0.7}{
-    \tikzstyle{principal}=[draw,node distance=50mm,minimum width=30mm,minimum height=25mm,text width=20mm,text centered]
-    \begin{tikzpicture}
-        \node[principal] (user) {User};
-        \node[principal,right of=user] (ci) {Cloud Instance};
-        \node[principal,right of=ci] (csp) {Cloud Storage Provider};
-        \draw[<->] (user) -- (ci);
-        \draw[<->] (ci) -- (csp);
-        \draw[decorate,decoration={brace,mirror,raise=4pt}] (ci.south west) -- (csp.south east) node[midway,below,yshift=-4mm] {Path ORAM Protocol};
-    \end{tikzpicture}}
-    \caption{ORAM can be built as a MirageOS application, which can run on a trusted cloud instance.}
-    \label{fig:cloudInstance}
-\end{figure}
+    \frametitle{Basic ORAM}
+    \begin{center}
+        \tikzstyle{function}=[draw=blue!50,thick,fill=blue!20,minimum width=30mm,minimum height=10mm]
+        \tikzstyle{function3high}=[function,minimum height=42.3mm]
+        \tikzstyle{function2wide}=[function,minimum width=70mm]
+        \tikzstyle{nofunction}=[minimum width=30mm,minimum height=10mm]
+        \tikzstyle{data}=[function,draw=red!50,fill=red!20]
+        \tikzstyle{module}=[draw,inner sep=0,row sep=6mm,column sep=10mm,ampersand replacement=\&]
+        \scalebox{0.5}{
+            \begin{tikzpicture}[thick,>=stealth']
+            \matrix (disk) [module] {
+                \node[nofunction] (mC0) {}; \&
+                \node[nofunction] (mC1) {}; \\
+            };
+            \node[font=\huge] at ($(disk) - (90mm,0)$) {Disk};
+            \node[function2wide] (block) at ($(mC0) + (20.15mm,0)$) {\texttt{BLOCK}};
+        \end{tikzpicture}}
+    \end{center}
 \end{frame}
 
 \begin{frame}
-    \frametitle{Implementation of Basic ORAM}
-    \begin{itemize}
-        \item Built Path ORAM as a functor satisfying Mirage's \texttt{BLOCK} interface
-        \item A functor is a module parameterised over the implementation of another module
-        \item This allows the underlying implementation of the storage device to be abstracted away
-        \item The stash was built as a hash table
-        \item The position map was built as a 3-dimensional array to allow 64-bit addresses
-    \end{itemize}
+    \frametitle{Basic ORAM}
+    \begin{center}
+        \tikzstyle{function}=[draw=blue!50,thick,fill=blue!20,minimum width=30mm,minimum height=10mm]
+        \tikzstyle{function3high}=[function,minimum height=42.3mm]
+        \tikzstyle{function2wide}=[function,minimum width=70mm]
+        \tikzstyle{nofunction}=[minimum width=30mm,minimum height=10mm]
+        \tikzstyle{data}=[function,draw=red!50,fill=red!20]
+        \tikzstyle{module}=[draw,inner sep=0,row sep=6mm,column sep=10mm,ampersand replacement=\&]
+        \scalebox{0.5}{
+            \begin{tikzpicture}[thick,>=stealth']
+            \matrix (enc) [module] {
+              \node[nofunction] (mA0) {Encrypt}; \&
+              \node[nofunction] (mA1) {Encrypt}; \\
+            };
+            \node[font=\huge] at ($(enc) - (90mm,0)$) {Encryption};
+            \node[function2wide] (funcenc) at ($(mA0) + (20.15mm,0)$) {\texttt{BLOCK}};
+            \matrix (disk) at ($(enc) - (0,40mm)$) [module] {
+              \node[function] (mC0) {Read}; \&
+              \node[function] (mC1) {Write}; \\
+            };
+            \node[font=\huge] at ($(disk) - (90mm,0)$) {Disk};
+            \draw[->] (mC0) -- (mA0);
+            \draw[->] (mA1) -- (mC1);
+        \end{tikzpicture}}
+    \end{center}
 \end{frame}
+
+\begin{frame}
+    \frametitle{Basic ORAM}
+    \begin{center}
+        \tikzstyle{function}=[draw=blue!50,thick,fill=blue!20,minimum width=30mm,minimum height=10mm]
+        \tikzstyle{function3high}=[function,minimum height=42.3mm]
+        \tikzstyle{function2wide}=[function,minimum width=70mm]
+        \tikzstyle{nofunction}=[minimum width=30mm,minimum height=10mm]
+        \tikzstyle{data}=[function,draw=red!50,fill=red!20]
+        \tikzstyle{module}=[draw,inner sep=0,row sep=6mm,column sep=10mm,ampersand replacement=\&]
+        \scalebox{0.5}{
+            \begin{tikzpicture}[thick,>=stealth']
+            \matrix (enc) [module] {
+              \node[function] (m90) {Read}; \&
+              \node[function] (m91) {Write}; \\
+              \node[nofunction] (mA0) {Encrypt}; \&
+              \node[nofunction] (mA1) {Encrypt}; \\
+              \node[function] (mB0) {Read}; \&
+              \node[function] (mB1) {Write}; \\
+            };
+            \node[font=\huge] at ($(enc) - (90mm,0)$) {Encryption};
+            \node[function2wide] (funcenc) at ($(mA0) + (20.15mm,0)$) {Encrypt};
+            \matrix (disk) at ($(enc) - (0,40mm)$) [module] {
+              \node[function] (mC0) {Read}; \&
+              \node[function] (mC1) {Write}; \\
+            };
+            \node[font=\huge] at ($(disk) - (90mm,0)$) {Disk};
+            \draw[->] ($(m91) + (0,15mm)$) -- (m91);
+            \draw[->] (m91) -- (funcenc);
+            \draw[->] (funcenc) -- (mB1);
+            \draw[->] (mB1) -- (mC1);
+            \draw[->] (mC0) -- (mB0);
+            \draw[->] (mB0) -- (funcenc);
+            \draw[->] (funcenc) -- (m90);
+            \draw[->] (m90) -- ($(m90) + (0,15mm)$);
+        \end{tikzpicture}}
+    \end{center}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Basic ORAM}
+    \begin{center}
+        \tikzstyle{function}=[draw=blue!50,thick,fill=blue!20,minimum width=30mm,minimum height=10mm]
+        \tikzstyle{function3high}=[function,minimum height=42.3mm]
+        \tikzstyle{function2wide}=[function,minimum width=70mm]
+        \tikzstyle{nofunction}=[minimum width=30mm,minimum height=10mm]
+        \tikzstyle{data}=[function,draw=red!50,fill=red!20]
+        \tikzstyle{module}=[draw,inner sep=0,row sep=6mm,column sep=10mm,ampersand replacement=\&]
+        \scalebox{0.5}{
+            \begin{tikzpicture}[thick,>=stealth']
+            \matrix (oram) [module] {
+              \node[nofunction] (m80) {}; \&
+              \node[nofunction] (m81) {}; \\
+            };
+            \node[font=\huge] at ($(oram) - (90mm,0)$) {ORAM};
+            \node[function2wide] (funcaccess) at ($(m80) + (20.15mm,0)$) {\texttt{BLOCK}};
+            \matrix (enc) at ($(oram) - (0,55mm)$) [module] {
+              \node[function] (m90) {Read}; \&
+              \node[function] (m91) {Write}; \\
+              \node[nofunction] (mA0) {Encrypt}; \&
+              \node[nofunction] (mA1) {Encrypt}; \\
+              \node[function] (mB0) {Read}; \&
+              \node[function] (mB1) {Write}; \\
+            };
+            \node[font=\huge] at ($(enc) - (90mm,0)$) {Encryption};
+            \node[function2wide] (funcenc) at ($(mA0) + (20.15mm,0)$) {Encrypt};
+            \matrix (disk) at ($(enc) - (0,40mm)$) [module] {
+              \node[function] (mC0) {Read}; \&
+              \node[function] (mC1) {Write}; \\
+            };
+            \node[font=\huge] at ($(disk) - (90mm,0)$) {Disk};
+            \draw[->] (m81) -- (m91);
+            \draw[->] (m91) -- (funcenc);
+            \draw[->] (funcenc) -- (mB1);
+            \draw[->] (mB1) -- (mC1);
+            \draw[->] (mC0) -- (mB0);
+            \draw[->] (mB0) -- (funcenc);
+            \draw[->] (funcenc) -- (m90);
+            \draw[->] (m90) -- (m80);
+        \end{tikzpicture}}
+    \end{center}
+\end{frame}
+
+\begin{frame}
+    \frametitle{Basic ORAM}
+    \begin{center}
+        \tikzstyle{function}=[draw=blue!50,thick,fill=blue!20,minimum width=30mm,minimum height=10mm]
+        \tikzstyle{function3high}=[function,minimum height=42.3mm]
+        \tikzstyle{function2wide}=[function,minimum width=70mm]
+        \tikzstyle{nofunction}=[minimum width=30mm,minimum height=10mm]
+        \tikzstyle{data}=[function,draw=red!50,fill=red!20]
+        \tikzstyle{module}=[draw,inner sep=0,row sep=6mm,column sep=10mm,ampersand replacement=\&]
+        \scalebox{0.5}{
+            \begin{tikzpicture}[thick,>=stealth']
+            \matrix (oram) [module] {
+              \node[function] (m60) {Read}; \&
+              \node[function] (m61) {Write}; \&
+              \node[data] (m62) {Position Map}; \\
+              \node[nofunction] (m70) {Access}; \&
+              \node[nofunction] (m71) {Access}; \&
+              \node[data] (m72) {Stash}; \\
+              \node[function] (m80) {Read Bucket}; \&
+              \node[function] (m81) {Write Bucket}; \&
+              \node[function] (m82) {Flush}; \\
+            };
+            \node[font=\huge] at ($(oram) - (90mm,0)$) {ORAM};
+            \node[function2wide] (funcaccess) at ($(m70) + (20.15mm,0)$) {Access};
+            \matrix (enc) at ($(oram) - (0,55mm)$) [module] {
+              \node[function] (m90) {Read}; \&
+              \node[function] (m91) {Write}; \\
+              \node[nofunction] (mA0) {Encrypt}; \&
+              \node[nofunction] (mA1) {Encrypt}; \\
+              \node[function] (mB0) {Read}; \&
+              \node[function] (mB1) {Write}; \\
+            };
+            \node[font=\huge] at ($(enc) - (90mm,0)$) {Encryption};
+            \node[function2wide] (funcenc) at ($(mA0) + (20.15mm,0)$) {Encrypt};
+            \matrix (disk) at ($(enc) - (0,40mm)$) [module] {
+              \node[function] (mC0) {Read}; \&
+              \node[function] (mC1) {Write}; \\
+            };
+            \node[font=\huge] at ($(disk) - (90mm,0)$) {Disk};
+            \draw[->] ($(m61) + (0,15mm)$) -- (m61);
+            \draw[->] (m61) -- (funcaccess);
+            \draw[->] (funcaccess) -- (m81);
+            \draw[->] (m81) -- (m91);
+            \draw[->] (m91) -- (funcenc);
+            \draw[->] (funcenc) -- (mB1);
+            \draw[->] (mB1) -- (mC1);
+            \draw[->] (mC0) -- (mB0);
+            \draw[->] (mB0) -- (funcenc);
+            \draw[->] (funcenc) -- (m90);
+            \draw[->] (m90) -- (m80);
+            \draw[->] (m80) -- (funcaccess);
+            \draw[->] (funcaccess) -- (m60);
+            \draw[->] (m60) -- ($(m60) + (0,15mm)$);
+            \draw[<->] (funcaccess) -- (m62);
+            \draw[<->] (funcaccess) -- (m72);
+            \draw[->] (m62) to [bend left=90] (m82);
+            \draw[->] (m72) -- (m82);
+            \draw[->] (m82) -- (m91);
+        \end{tikzpicture}}
+    \end{center}
+\end{frame}
+
+%    \begin{itemize}
+%        \item Built Path ORAM as a functor satisfying Mirage's \texttt{BLOCK} interface
+%        \item A functor is a module parameterised over the implementation of another module
+%        \item This allows the underlying implementation of the storage device to be abstracted away
+%        \item The stash was built as a hash table
+%        \item The position map was built as a 3-dimensional array to allow 64-bit addresses
+%    \end{itemize}
 
 \begin{frame}
     \frametitle{Recursive ORAM}
     \begin{itemize}
-        \item Do be able to disconnect from ORAM we need it to be stateless
-        \item Writing the entire position map to disk is expensive
+        \item We want ORAM to be stateless, but writing position map to disk is expensive
         \item Recursive ORAM stores the position map of the first ORAM in another ORAM
-        \item This position map ORAM will have a smaller position map, because multiple addresses fit in one data block
-        \item This process can be repeated until we have a constant sized position map
-        \item Implemented this using recursive functors, parameterised in the position map
+            \begin{itemize}
+                \item The second ORAM is smaller than the first
+                \item This can be repeated
+            \end{itemize}
+        \item Implemented this using recursive functors
     \end{itemize}
 \end{frame}
 
 \begin{frame}
-    \frametitle{The Rest}
-    \begin{itemize}
-        \item On top of ORAM I built an inode-based file system
-        \item This included an implementation of B-Trees to store the inode index
-        \item On top of the file system I built a simple search module
-        \item This consists of an inverted index built on a hash table of hash sets
-        \item I incorporated an exisiting encryption library, also built as a functor
-    \end{itemize}
+    \frametitle{Search Application}
+    \begin{center}
+        \tikzstyle{function}=[draw=blue!50,thick,fill=blue!20,minimum width=30mm,minimum height=10mm]
+        \tikzstyle{function3high}=[function,minimum height=42.3mm]
+        \tikzstyle{function2wide}=[function,minimum width=70mm]
+        \tikzstyle{nofunction}=[minimum width=30mm,minimum height=10mm]
+        \tikzstyle{data}=[function,draw=red!50,fill=red!20]
+        \tikzstyle{module}=[draw,inner sep=0,row sep=6mm,column sep=10mm,ampersand replacement=\&]
+        \scalebox{0.4}{
+        \begin{tikzpicture}[thick,>=stealth']
+            \matrix (search) [module] {
+              \node[nofunction] (m00) {Read File}; \&
+              \node[nofunction] (m01) {Write File}; \&
+              \node[function] (m02) {Search}; \\
+              \node[nofunction] (m10) {Read File}; \&
+              \node[nofunction] (m11) {Index}; \&
+              \node[data] (m12) {Index}; \\
+              \node[nofunction] (m20) {Read File}; \&
+              \node[nofunction] (m21) {Write File}; \&
+              \node[function] (m22) {Flush}; \\
+            };
+            \node[font=\huge] at ($(search) - (90mm,0)$) {Search};
+            \node[function3high] (readfile) at ($(m10) + (0.15mm,0)$) {Read File};
+            \node[function3high] (writefile) at ($(m11) + (0.15mm,0)$) {Write File};
+            \matrix (fs) at ($(search) - (0,55mm)$) [module] {
+              \node[nofunction] (m30) {Read File}; \&
+              \node[nofunction] (m31) {Write File}; \&
+              \node[data] (m32) {Free Map}; \\
+              \node[nofunction] (m40) {Read File}; \&
+              \node[nofunction] (m41) {Write File}; \&
+              \node[data] (m42) {Inode Index}; \\
+              \node[nofunction] (m50) {Read}; \&
+              \node[nofunction] (m51) {Write}; \&
+              \node[function] (m52) {Flush}; \\
+            };
+            \node[font=\huge] at ($(fs) - (90mm,0)$) {File System};
+            \node[function3high] at ($(m40) + (0.15mm,0)$) {Read File};
+            \node[function3high] at ($(m41) + (0.15mm,0)$) {Write File};
+            \matrix (oram) at ($(fs) - (0,55mm)$) [module] {
+              \node[function] (m60) {Read}; \&
+              \node[function] (m61) {Write}; \&
+              \node[data] (m62) {Position Map}; \\
+              \node[nofunction] (m70) {Access}; \&
+              \node[nofunction] (m71) {Access}; \&
+              \node[data] (m72) {Stash}; \\
+              \node[function] (m80) {Read Bucket}; \&
+              \node[function] (m81) {Write Bucket}; \&
+              \node[function] (m82) {Flush}; \\
+            };
+            \node[font=\huge] at ($(oram) - (90mm,0)$) {ORAM};
+            \node[function2wide] (funcaccess) at ($(m70) + (20.15mm,0)$) {Access};
+            \draw[->] ($(m01) + (0,15mm)$) -- (m01);
+            \draw[->] (m11) -- (m12);
+            \draw[->] (m21) -- (m31);
+            \draw[->] (m51) -- (m61);
+            \draw[->] (m61) -- (funcaccess);
+            \draw[->] (funcaccess) -- (m81);
+            \draw[->] (m80) -- (funcaccess);
+            \draw[->] (funcaccess) -- (m60);
+            \draw[->] (m60) -- (m50);
+            \draw[->] (m30) -- (m20);
+            \draw[->] (m00) -- ($(m00) + (0,15mm)$);
+            \draw[->] (m02) -- ($(m02) + (0,15mm)$);
+            \draw[->] (m12) -- (m02);
+            \draw[->] (m12) -- (m22);
+            \draw[->] (m22) -- (m31);
+            \draw[<->] ($(m41.east) + (0,2mm)$) -- (m32);
+            \draw[<->] (m41) -- (m42);
+            \draw[->] (m32) to [bend left=90] (m52);
+            \draw[->] (m42) -- (m52);
+            \draw[->] (m52) -- (m61);
+            \draw[<->] (funcaccess) -- (m62);
+            \draw[<->] (funcaccess) -- (m72);
+            \draw[->] (m62) to [bend left=90] (m82);
+            \draw[->] (m72) -- (m82);
+        \end{tikzpicture}}
+    \end{center}
+    %\begin{itemize}
+    %    \item On top of ORAM I built an inode-based file system
+    %    \item This included an implementation of B-Trees to store the inode index
+    %    \item On top of the file system I built a simple search module
+    %    \item This consists of an inverted index built on a hash table of hash sets
+    %    \item I incorporated an exisiting encryption library, also built as a functor
+    %\end{itemize}
 \end{frame}
 
 \section{Evaluation}
 
 \begin{frame}
-    \frametitle{Parameter Optimisation}
+    \frametitle{Evaluation}
     \begin{itemize}
-        \item ORAM has a number of parameters that can be adjusted
-        \item These include the size of blocks and the number of blocks in a bucket
-        \item I focused on block size, because this has been shown to dramatically affect the speed of IO operations
-        \item The results showed this to be true, but there is a trade off to be made
-        \item A large block size means a larger stash, so a larger overhead for statelessness
+        \item Explored parameter space
+            \begin{itemize}
+                \item Specifically looked at block size
+                \item Increasing block size increased speed
+                \item Chose block size of 1MB
+            \end{itemize}
+        \item Measured performance
+            \begin{itemize}
+                \item Compared ORAM with encryption, ORAM without encryption, and control
+                \item Showed expected logarithmic overheads
+                \item Took $\approx$1000s to transfer 1GB on 4GB ORAM
+            \end{itemize}
+        \item Showed security properties using statistical techniques
     \end{itemize}
 \end{frame}
+
+%\begin{frame}
+%    \frametitle{Parameter Optimisation}
+%    \begin{itemize}
+%        \item ORAM has a number of parameters that can be adjusted
+%        \item These include the size of blocks and the number of blocks in a bucket
+%        \item I focused on block size, because this has been shown to dramatically affect the speed of IO operations
+%        \item The results showed this to be true, but there is a trade off to be made
+%        \item A large block size means a larger stash, so a larger overhead for statelessness
+%    \end{itemize}
+%\end{frame}
 
 \begin{frame}
     \frametitle{Block Size Results}
@@ -534,17 +819,17 @@
     \end{figure}
 \end{frame}
 
-\begin{frame}
-    \frametitle{Performance Evaluation}
-    \begin{itemize}
-        \item In the Path ORAM paper, they report a theoretical overhead of $O(\log N)$
-        \item $N$ here is the size of the ORAM in blocks
-        \item I performed 10 runs of 1000 iterations, for a total of $\approx$ 1GB per run
-        \item I used ORAMs from size 12 (tree of depth 1) to 4092 (depth 9)
-        \item The results showed a roughly logarithmic overhead, compared to the control
-        \item Encryption added a further constant overhead
-    \end{itemize}
-\end{frame}
+%\begin{frame}
+%    \frametitle{Performance Evaluation}
+%    \begin{itemize}
+%        \item In the Path ORAM paper, they report a theoretical overhead of $O(\log N)$
+%        \item $N$ here is the size of the ORAM in blocks
+%        \item I performed 10 runs of 1000 iterations, for a total of $\approx$ 1GB per run
+%        \item I used ORAMs from size 12 (tree of depth 1) to 4092 (depth 9)
+%        \item The results showed a roughly logarithmic overhead, compared to the control
+%        \item Encryption added a further constant overhead
+%    \end{itemize}
+%\end{frame}
 
 \begin{frame}
     \frametitle{Performance Results}
@@ -558,15 +843,18 @@
 
 \begin{frame}
     \frametitle{Security Evaluation}
-    \begin{itemize}
-        \item Used statistical techniques to show that the observed access pattern is random
-        \item The first technique is autocorrelation plotting
-        \item This takes the correlation of a sequence with itself plotted for a number of lags
-        \item For a random sequence, noise should cancel out to give values close to zero
-        \item The second technique is runs testing
-        \item This counts the number of runs of consecutive values all above or below the median
-        \item We compare this number to that of a random process
-    \end{itemize}
+    \begin{enumerate}
+        \item Autocorrelation plotting
+            \begin{itemize}
+                \item Plot the correlation of a sequence with itself for a number of lags
+                \item For a random sequence noise cancels out to give values close to zero
+            \end{itemize}
+        \item Runs testing
+            \begin{itemize}
+                \item This counts the number of runs of consecutive values all above or below the median
+                \item We compare this number to that of a random process
+            \end{itemize}
+    \end{enumerate}
 \end{frame}
 
 \begin{frame}
@@ -595,7 +883,7 @@
     \begin{figure}
         \centering
         \scalebox{0.5}{\input{../runs.tex}}
-        \caption{The distribution of the number of runs in 1000 access patterns of length 180. The dashed black lines represent 0.05\% tail cut-offs. 92.2\% of values fall within these bounds, implying that the access patterns were created from a random process.}
+        \caption{The distribution of the number of runs in 1000 access patterns of length 180. The dashed black lines represent 5\% tail cut-offs. 92.2\% of values fall within these bounds, implying that the access patterns were created from a random process.}
         \label{fig:runsTestPlot}
     \end{figure}
 \end{frame}
@@ -603,17 +891,19 @@
 \section{Summary}
 
 \begin{frame}
-    \frametitle{Further Work}
+    \frametitle{Summary}
     \begin{itemize}
-        \item Further exploration of the parameter space
-        \item Examination of alternative performance measures including bandwidth overheads
-        \item Deployment to the cloud and testing of overheads in real scenario
+        \item Homomorphic methods of encrypted search can leak information via the side channel of access pattern
+        \item ORAM provides a solution to this problem
+        \item My implementation gives the desired security properties while maintaining acceptable performance
     \end{itemize}
 \end{frame}
 
+\addtocounter{framenumber}{-1}
+
 \begin{frame}[plain]
     \begin{center}
-        \huge Thank you \\ Questions?
+        \huge Thank You \\ \vskip\baselineskip Questions? \\ \vskip\baselineskip \large\texttt{https://github.com/ruhatch/mirage-oram}
     \end{center}
 \end{frame}
 
